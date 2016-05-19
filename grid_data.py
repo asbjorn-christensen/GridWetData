@@ -16,51 +16,14 @@ _default_grid_tag = "ns"   # spatial region / resolution tag associated with dat
 def has_rank_2(obj):
     return hasattr(obj, "__len__") and hasattr(obj[0], "__len__") and not hasattr(obj[0][0], "__len__")
 
-#  ====================================================================================
-## Super class for interpolation in space+time by first interpolating space, then time
-#
-# <b> Roles </b> 
-#    \li keep track of data cache, decide whether to reload
-#    \li interact with data manager
-#    \li call hook is redirectd to interpolate, so instances are callable as obj(where, when)
-#
-# compositional relation to GridData_3D
-# Attributes set by sub classes:
-#       prop: data property type (set by sub classes)
-#    
-#    
-class GridData_3DwithTime:
-    #  -----------------------------------------------------
-    ## constructor
-    #  Data is first loaded at interpolation time, when time argument is available
-    #  @param self   The object pointer
-    #  @param dmg    data manager instance
-    #  @param gtag   grid tag (spatial area + resolution). Default is _default_grid_tag
-    #
-    def __init__(self, dmg, gtag = _default_grid_tag):
-        ## data manager instance (Role: map time to file names)
-        self.dmg       = dmg
-        ## datetime instance corresponding to current cache content (None for empty cache)
-        self.when_last = None # empty cache
-        ## the grid (spatial area / resolution) tag (set at instantiation)
-        self.gtag      = gtag
-        
-        
-    ## --------------------------------------------------------------------
-    ## Generate a informative string representation of object
-    #  @param self The object pointer
-    #  @return string representation of instance
-    #
-    def __str__(self):
-        iam = "GridData_3DwithTime instance for prop=%s for gtag=%s\n" % (self.prop, self.gtag)
-        if self.when_last is None:
-            iam = iam + "cache empty"
-        else:
-            iam = iam + "cache loaded for t=%s\n" % str(self.when_last)
-            iam = iam + "left  bracket : w=%f file=%s\n" % (self.w0, self.gdata0.file_name)
-            iam = iam + "right bracket : w=%f file=%s"   % (self.w1, self.gdata1.file_name)
-        return iam
 
+#  ====================================================================================
+## Super class for interpolation in space+time by first interpolating space, then time - Generic for 2D/3D
+#
+#  sub classes must provide constructor and update_cache, which sets interpolation points (gdata0, gdata1) and weights (w0,w1)
+#  corresponding to time when_last
+        
+class GridData_withTime:
     ## --------------------------------------------------------------------
     ## Space+time interpolation front end
     #  This methods parses time argument and performs time interpolation part after
@@ -83,7 +46,13 @@ class GridData_3DwithTime:
     ## redirect call hook in class scope   
     __call__ = interpolate 
     #
-    
+
+
+#  ====================================================================================
+## Super class for interpolation in space+time by first interpolating space, then time - specific for 3D
+#
+#  compositional relation to GridData_3D
+class GridData_3DwithTime(GridData_withTime):
     ## --------------------------------------------------------------------------------------------
     ## Create a GridData_3D instance data snapshot corresponding to time when by time interpolation
     #  sea level corresponding to time when is also obtained by interpolation
@@ -98,6 +67,50 @@ class GridData_3DwithTime:
         mid_grid.set_reference_level(self.w0*z0 + self.w1*z1)
         return GridData_3D(mid_grid, mid_data)
 
+
+#  ====================================================================================
+## Super class for interpolation in space+time by first interpolating space, then time
+#  specific for 3D + interaction with DataManager
+# <b> Roles </b> 
+#    \li keep track of data cache, decide whether to reload
+#    \li interact with data manager
+#    \li call hook is redirectd to interpolate, so instances are callable as obj(where, when)
+#
+# compositional relation to GridData_3D
+# Attributes set by sub classes:
+#       prop: data property type (set by sub classes)
+#    
+#    
+class GridData_3DwithTime_DataManager(GridData_3DwithTime):
+    #  -----------------------------------------------------
+    ## constructor
+    #  Data is first loaded at interpolation time, when time argument is available
+    #  @param self   The object pointer
+    #  @param dmg    data manager instance
+    #  @param gtag   grid tag (spatial area + resolution). Default is _default_grid_tag
+    #
+    def __init__(self, dmg, gtag = _default_grid_tag):
+        ## data manager instance (Role: map time to file names)
+        self.dmg       = dmg
+        ## datetime instance corresponding to current cache content (None for empty cache)
+        self.when_last = None # empty cache
+        ## the grid (spatial area / resolution) tag (set at instantiation)
+        self.gtag      = gtag
+        
+    ## --------------------------------------------------------------------
+    ## Generate a informative string representation of object
+    #  @param self The object pointer
+    #  @return string representation of instance
+    #
+    def __str__(self):
+        iam = "GridData_3DwithTime instance for prop=%s for gtag=%s\n" % (self.prop, self.gtag)
+        if self.when_last is None:
+            iam = iam + "cache empty"
+        else:
+            iam = iam + "cache loaded for t=%s\n" % str(self.when_last)
+            iam = iam + "left  bracket : w=%f file=%s\n" % (self.w0, self.gdata0.file_name)
+            iam = iam + "right bracket : w=%f file=%s"   % (self.w1, self.gdata1.file_name)
+        return iam
 
     ## Trigger load of a specific time frame as GridData_3D instance and instance grid copy corresponding to that sea level
     #  It is assumed that provided data sets in (fname_data,fname_z) are consistent
@@ -149,6 +162,8 @@ class GridData_3DwithTime:
             ## GridData_3D instance corresponding to upper time point
             self.gdata1 = self.load_frame(dname1, zname1) 
         self.when_last = when
+
+
         
 # ==============================================================================
 ## Super class for managing a grid data set corresponding to a specific time
@@ -296,7 +311,7 @@ class GridData_3D(GridData):
    
 
 ## GridData_3D sub class for temperature data in both space and time
-class TemperatureData_3DwithTime(GridData_3DwithTime):
+class TemperatureData_3DwithTime(GridData_3DwithTime_DataManager):
     ## data property type 
     prop = "t"   # set class attribute, passed to data manager when soliciting data
     
