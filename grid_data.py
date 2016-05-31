@@ -18,7 +18,7 @@ def has_rank_2(obj):
 
 
 #  ====================================================================================
-## Super class for interpolation in space+time by first interpolating space, then time - Generic for 2D/3D
+## Super class for offline interpolation in space+time by first interpolating space, then time - Generic for 2D/3D
 #
 #  sub classes must provide constructor and update_cache, which sets interpolation points (gdata0, gdata1) and weights (w0,w1)
 #  corresponding to time when_last

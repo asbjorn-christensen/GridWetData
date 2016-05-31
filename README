@@ -1,4 +1,5 @@
-
+document all dependences
+document install 
 ------------------------------------------------------------------------------
                 Usage examples
 ------------------------------------------------------------------------------
@@ -27,3 +28,7 @@
 
   numpy
   scipy (version > 11.0)
+
+  DTU10: f2py (comes with scipy)
+         gfortran or another fortran compiler
+
