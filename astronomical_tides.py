@@ -11,7 +11,6 @@
 from grids import *
 from grid_data import has_rank_2
 from datetime import *
-from subprocess import Popen, PIPE
 import jdcal
 from constants import EarthMeanRadius, deg2rad, g, omega
 import dtu10API

@@ -2,8 +2,11 @@
 # -*- coding: utf-8 -*-  
 ##########################################################################################
 #        Data spectator example, deriving from grids / grid_data
+#
+#        Input data not shipped along with this module
 #        git clone https://github.com/asbjorn-christensen/GridWetData
 #        ncdump -h /home/data/ECMWF/NorthSea_waves/swh_NS_2004-2015.nc
+#
 ##########################################################################################
 
 from grids import * 
@@ -136,7 +139,7 @@ class WaveMovie(GridData_withTime):  #
 #
 if __name__ == "__main__":
     _verbose = True
-    wmo = WaveMovie("/home/data/ECMWF/NorthSea_waves/swh_NS_2004-2015.nc")
+    wmo = WaveMovie("/home/data/ECMWF/NorthSea_waves/swh_NS_2004-2015.nc")  # Input data not shipped along 
     start_time = datetime(2006,11,20, 5,23)
     end_time   = datetime(2006,11,22, 5,23)
     here       = (4.02, 55.07)
