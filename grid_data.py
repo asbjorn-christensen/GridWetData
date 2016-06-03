@@ -259,7 +259,14 @@ class GridData:
         else:
             raise exception.ValueError("Filename extension in %s does not map to a writing method" % fname)
 
-
+    ## Specific writer for netcdf - delegate write request to grid
+    #  @param self   The object pointer.
+    #  @param fname  File name / file pointer
+    #  @param kwargs other optional arguments (parsed on format basis)    
+    def write_data_as_netCDF(self, fname,  **kwargs):
+        self.grid.write_data_as_netCDF(fname, self.data, **kwargs) # do not parse kwargs
+    
+    
 # ==============================================================================
 ## Sub class of GridData for 2-dimensional situations (currently void)
 class GridData_2D(GridData):

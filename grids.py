@@ -25,7 +25,9 @@
 import sys
 import os
 import exceptions
-from   scipy.io import netcdf   # there is a bug in scipy.io.netcdf < 0.12 in writing part
+#from   scipy.io import netcdf   # there is a bug in scipy.io.netcdf < 0.12 in writing part, 0.17.0 has a writing issue 
+import netCDF4 as netcdf         # use this API until scipy.io.netcdf is fixed                            
+
 from   numpy import *
 import copy                     # for grid copy, notice numpy also provides a copy which is shadowed by this import
 from   datetime import *
@@ -251,12 +253,13 @@ class LonLatGrid:
         y1 = self.lat0 + (self.ny-1)*self.dlat + 1.0e-12 # include this point
         return mgrid[x0:x1:self.dlon, y0:y1:self.dlat]
     
-    # ====================== writers ======================
-
-    ## Write data in netCDF format to file fname
+    # ==================================================== writers ===================================================
+    #
+    ## Write/append data in netCDF format to file fname
     #  @param self          The object pointer.
-    #  @param fname         File name for writing data.
-    #  @param data          Plain 2D array
+    #  @param file          File name / NetCDFFile instance for writing data
+    #  @param data          File name provided: write plain 2D array 
+    #                       NetCDFFile instance provided: append data to variable data along unlimited dimension
     #  @param undef         Optional keyword argument:  value of data corresponding to undefined grid points (just passed to netcdf file). Default: None
     #  @param bitmask       Optional keyword argument:  1 for valid points, 0 for undefined grid points. Default: None
     #  @param specification Optional keyword argument:  specification title attribute associated with data. Default: None
@@ -268,11 +271,41 @@ class LonLatGrid:
     #                                                   'h' : NC_SHORT:  (2 bytes) <br> 
     #                                                   'i' : NC_INT:    (4 bytes) <br> 
     #                                                   'f' : NC_FLOAT:  (4 bytes) <br> 
-    #                                                   'd' : NC_DOUBLE: (8 bytes) <br> 
+    #                                                   'd' : NC_DOUBLE: (8 bytes) <br>
+    #  @param index         Optional/mandatory keyword argument: value for index (mandatory for append, ignored for write)
+    #
     #  undef/bitmask are overlapping ways of flagging undefined grid points. If both are defined both are written, do not assess consistency
-    def write_data_as_netCDF(self, fname, data, **kwargs): 
+    #  In append mode, optional meta data is not updated, but pertains to all frames in data
+    #  Currently it is hardcoded that the data is stored in netCDF variable "data(nx,ny)" in single frame mode
+    #  and "data(nframes,nx,ny)" indexed by "index(fnframes)" in append mode
+    # 
+    def write_data_as_netCDF(self, file, data, **kwargs):
+        if isinstance(file, basestring):   # write single frame
+            ncfile  = netcdf.Dataset(file, "w")
+            kwargs["index"] = None  # suppress append mode
+            self._setup_netCDF_data_set(ncfile, data, **kwargs)
+            ncfile.close()
+        elif isinstance(file, netcdf.Dataset):
+            if file.dimensions == {}:  # empty set, test also OK for python-netcdf
+                self._setup_netCDF_data_set(file, data, **kwargs) # index mandatory
+            else: # assume properly configured
+                self._add_netCDF_data_(file, data, kwargs["index"])  # index mandatory
+        else:
+            
+            raise exceptions.ValueError("argument file inappropriate: file = %s" % str(file))
+
+    # internal method: append data + index along unlimited dimension after last stored frame
+    def _add_netCDF_data_(self, ncfile, data, index):
+        inext                                = ncfile.variables["data"].shape[0]
+        ncfile.variables["data"][inext,:,:]  = data
+        ncfile.variables["index"][inext]     = index
+
+          
+    # internal method: configure netcdf data set and write data
+    # If index is None (default): single frame write
+    # If index is number:         store data in append mode, first index=index
+    def _setup_netCDF_data_set(self, ncfile, data, **kwargs):
         assert data.shape == (self.nx, self.ny)
-        ncfile  = netcdf.NetCDFFile(fname, "w", mmap=False)
         #
         #  --------- parse kwargs ---------
         #
@@ -304,41 +337,59 @@ class LonLatGrid:
         #
         #  --------- create dimensions ---------
         #
+        index = kwargs["index"] # mandatory keyword argument
+        if index is not None:   
+            ncfile.createDimension('nframes', None)   # None stands for the unlimited dimension
+            ncfile.nframes = "number of frames"
         ncfile.createDimension('nx', self.nx)
         ncfile.nx = "Zonal (west-east) grid dimension"
         ncfile.createDimension('ny', self.ny)
         ncfile.ny = "Meridional (south-north) grid dimension"
         #
-        #  --------- create/save data ---------
+        #  --------- create netcdf variables ---------
+        #
+        if index is not None: # append mode
+            var_index = ncfile.createVariable("index", 'd',       ('nframes',))
+            var_index.specification = "frame index"
+            var_data  = ncfile.createVariable("data",  data_type, ('nframes','nx','ny')) 
+        else:   #  single frame mode
+            var_data = ncfile.createVariable("data", data_type, ('nx','ny'))
+        #
+        if data_specification:
+                var_data.specification = data_specification
         #
         var_lon0 = ncfile.createVariable('lon0', 'd', ())
         var_lon0.specification = "Western grid edge in degrees"
-        var_lon0.assignValue(self.lon0)
         #
         var_lat0 = ncfile.createVariable('lat0', 'd', ())
         var_lat0.specification = "Southern grid edge in degrees"
-        var_lat0.assignValue(self.lat0)
         #
         var_dlon = ncfile.createVariable('dlon', 'd', ())
         var_dlon.specification = "Zonal grid increment in degrees, positive west-to-east"
-        var_dlon.assignValue(self.dlon)
         #
         var_dlat = ncfile.createVariable('dlat', 'd', ())
         var_dlat.specification = "Meridional grid increment in degrees, positive south-to-north"
-        var_dlat.assignValue(self.dlat)
         #
-        var_data = ncfile.createVariable("data", data_type, ('nx','ny'))
-        if data_specification:
-            var_data.specification = data_specification
-        var_data[:,:] = data
-        # 
         if bitmask:
             var_bitmask = ncfile.createVariable('bitmask', 'b', ('nx','ny')) # save as byte
             var_bitmask.specification = "Bitmask for data: 1 = valid, 0 = invalid)"
+        #
+        #  --------- assign netcdf variables ---------
+        #
+        var_lon0.assignValue(self.lon0)
+        var_lat0.assignValue(self.lat0)
+        var_dlon.assignValue(self.dlon)
+        var_dlat.assignValue(self.dlat)
+        if bitmask:
             var_bitmask[:,:] = bitmask # don't perform shape/value check
         #
-        ncfile.flush()
-        ncfile.close()
+        if index is not None: # write data as first frame
+            var_index[0]    = index
+            var_data[0,:,:] = data
+        else:                 # write data as single frame 
+            var_data[:,:] = data
+        # 
+        
         
     
     
@@ -725,9 +776,9 @@ class DMI_wetpoint_data:
     #  @param fname file name of netCDF data
     #
     def load_data_frame(self, fname):
-        ncfile      = netcdf.NetCDFFile(fname, mmap=False)
-        assert self.nwet == ncfile.dimensions["nwet"] 
-        wetptdata   = ncfile.variables["data"].data   # in Scientific.IO.NetCDF getValue() should be applied to retrieve array
+        ncfile      = netcdf.Dataset(fname)
+        assert self.nwet == ncfile.dimensions["nwet"].size
+        wetptdata   = ncfile.variables["data"][:]   # in Scientific.IO.NetCDF getValue() should be applied to retrieve array
         data        = InfoArray(self.inflate_array(wetptdata)) # 2D/3D sub class defines inflate_array
         ## set unit from file meta data
         data.unit   = ncfile.unit
@@ -743,19 +794,19 @@ class DMIGrid_2D(LonLatGrid, DMI_wetpoint_data):
     #  @param grid_desc   file name of grid descriptor in netCDF format
     #
     def __init__(self, grid_desc):
-        ncfile     = netcdf.NetCDFFile(grid_desc, mmap=False)
+        ncfile     = netcdf.Dataset(grid_desc)
         ## file name corresponding to loaded data set
         self.fname = grid_desc
-        nx        = ncfile.dimensions["nx"] # integer 
-        ny        = ncfile.dimensions["ny"] # integer 
+        nx        = ncfile.dimensions["nx"].size # integer 
+        ny        = ncfile.dimensions["ny"].size # integer 
         ## number of wet grid point
-        self.nwet = ncfile.dimensions["nwet2d"] # integer 
+        self.nwet = ncfile.dimensions["nwet2d"].size # integer 
         lon0      = ncfile.variables["lon0"].getValue() # Retrieve a scalar value from a scipy.io.netcdf.netcdf_variable
         lat0      = ncfile.variables["lat0"].getValue() # Retrieve a scalar value from a scipy.io.netcdf.netcdf_variable
         dlon      = ncfile.variables["dlon"].getValue() # Retrieve a scalar value from a scipy.io.netcdf.netcdf_variable
         dlat      = ncfile.variables["dlat"].getValue() # Retrieve a scalar value from a scipy.io.netcdf.netcdf_variable
         ## map buffer to 2 array: data[ix,iy] = buffer[map[ix,iy]]
-        self.map  = ncfile.variables["mapsurf_to_1d"].data     # in Scientific.IO.NetCDF getValue() should be applied to retrieve array
+        self.map  = ncfile.variables["mapsurf_to_1d"][:]     # in Scientific.IO.NetCDF getValue() should be applied to retrieve array
         ncfile.close()
         #
         LonLatGrid.__init__(self,  nx, ny, lon0, lat0, dlon, dlat)
@@ -787,21 +838,21 @@ class DMIGrid_3D(LonLatZGrid, DMI_wetpoint_data):
     #  @param grid_desc   file name of grid descriptor in netCDF format
     #
     def __init__(self, grid_desc):
-        ncfile     = netcdf.NetCDFFile(grid_desc, mmap=False)
+        ncfile     = netcdf.Dataset(grid_desc)
         ## file name corresponding to loaded data set
         self.fname = grid_desc
-        nx        = ncfile.dimensions["nx"]   # integer 
-        ny        = ncfile.dimensions["ny"]   # integer 
-        nz        = ncfile.dimensions["nz"]   # integer 
+        nx        = ncfile.dimensions["nx"].size   # integer 
+        ny        = ncfile.dimensions["ny"].size   # integer 
+        nz        = ncfile.dimensions["nz"].size   # integer
         ## number of wet grid point
-        self.nwet = ncfile.dimensions["nwet3d"]
+        self.nwet = ncfile.dimensions["nwet3d"].size   
         lon0      = ncfile.variables["lon0"].getValue()  # Retrieve a scalar value from a scipy.io.netcdf.netcdf_variable
         lat0      = ncfile.variables["lat0"].getValue()  # Retrieve a scalar value from a scipy.io.netcdf.netcdf_variable
         dlon      = ncfile.variables["dlon"].getValue()  # Retrieve a scalar value from a scipy.io.netcdf.netcdf_variable
         dlat      = ncfile.variables["dlat"].getValue()  # Retrieve a scalar value from a scipy.io.netcdf.netcdf_variable
         ## map buffer to 3D array: data[ix,iy,iz] = buffer[map[ix,iy,iz]]
-        self.map  = ncfile.variables["map3d_to_1d"].data     # in Scientific.IO.NetCDF getValue() should be applied to retrieve array
-        cellw0    = ncfile.variables["cell_thickness"].data  # in Scientific.IO.NetCDF getValue() should be applied to retrieve array
+        self.map  = ncfile.variables["map3d_to_1d"][:]     # in Scientific.IO.NetCDF getValue() should be applied to retrieve array
+        cellw0    = ncfile.variables["cell_thickness"][:]  # in Scientific.IO.NetCDF getValue() should be applied to retrieve array
         ncfile.close()
         #
         LonLatZGrid.__init__(self,  nx, ny, lon0, lat0, dlon, dlat, cellw0)
