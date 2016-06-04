@@ -729,6 +729,8 @@ class LonLatZGrid(LonLatGrid):
         return grid2D, data2D
 
     
+    def write_data_as_netCDF(self, file, data, **kwargs):
+        raise exceptions.NotImplementedError("to be implemented for class LonLatZGrid")
 
 
 

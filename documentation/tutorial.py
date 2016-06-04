@@ -129,3 +129,16 @@ temp    = TemperatureData_3DwithTime(dmg).snapshot_at(datetime(2015, 05, 20, 00,
 sindex  = derived_layers.StratificationFront(temp) # GridData_2D instance
 sindex.write_data("sindex.nc")                     # save data to file - netcdf format in this case
 
+
+#   5b) the example above writes a single frame to a netcdf file.
+#       It is also possible to write a series of frames - in this case you need to address the 
+#       specific writer (write_data_as_netCDF) as below, because suffix resolution can
+#       not be applied
+
+import  netCDF4 as netcdf
+ncfile = netcdf.Dataset("test.nc", "w")
+for minute in range(16,20):
+    temp    = TemperatureData_3DwithTime(dmg).snapshot_at(datetime(2015, 05, 20, 00, minute, 00))
+    sindex  = derived_layers.StratificationFront(temp) # generate 2D data frame
+    sindex.write_data_as_netCDF(ncfile, index=h)       # add frame to file
+ncfile.close()
