@@ -4,7 +4,7 @@
 #   Interface to DTU10 model to assess astronomical components of sea-surface elevation
 #   and derived geostrophical surface currents
 #   Requires module jdcal (https://pypi.python.org/pypi/jdcal) and module dtu10 
-#   Linux manual setup procedure for DTU10: cd DTU10; f2py -c -m dtu10API perth3_src.f
+#   Linux manual setup procedure for DTU10: cd DTU10; f2py -c -m dtu10API perth3.f
 #   f2py is part of SciPy
 ##########################################################################################
 
