@@ -4,7 +4,7 @@
 #   Interface to DTU10 model to assess astronomical components of sea-surface elevation
 #   and derived geostrophical surface currents
 #   Requires module jdcal (https://pypi.python.org/pypi/jdcal) and module dtu10 
-#   Linux setup procedure for DTU10: f2py -c -m dtu10API ortran_sources/perth3.f
+#   Linux manual setup procedure for DTU10: cd DTU10; f2py -c -m dtu10API perth3_src.f
 #   f2py is part of SciPy
 ##########################################################################################
 
@@ -13,7 +13,7 @@ from grid_data import has_rank_2
 from datetime import *
 import jdcal
 from constants import EarthMeanRadius, deg2rad, g, omega
-import dtu10API
+import DTU10.dtu10API
 
 # ===============================================================================
 ##  Provide a GridData_withTime like interface to the online model DTU10
