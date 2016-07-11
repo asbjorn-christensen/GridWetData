@@ -25,6 +25,8 @@
 # ---------------------------------------------------------------------------------------------------------------
 # <br>
 #
-from grid_data import *   # triggers import of data_manager, grids and support libraries
+from grid_data import *   # triggers import of grids and support libraries
 import derived_layers
-
+import grids           # offer encapsulated environment for import GridWetData.grids
+import grid_data       # offer encapsulated environment for import GridWetData.grid_data
+#
