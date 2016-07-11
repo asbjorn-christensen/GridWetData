@@ -30,3 +30,9 @@ import derived_layers
 import grids           # offer encapsulated environment for import GridWetData.grids
 import grid_data       # offer encapsulated environment for import GridWetData.grid_data
 #
+try:
+    import astronomical_tides
+except exceptions.ImportError:
+    print "astronomical_tides not enabled" # API not installed
+    
+#
