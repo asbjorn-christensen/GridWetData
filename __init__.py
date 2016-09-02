@@ -35,4 +35,6 @@ try:
 except exceptions.ImportError:
     print "astronomical_tides not enabled" # API not installed
     
+# --- enable specific interfaces
+import HBM
 #

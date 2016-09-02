@@ -27,3 +27,4 @@
 from HBM_grid_data import *   # triggers import of data_manager, grids and support libraries
 import HBM_grids              # offer encapsulated environment for import GridWetData.HBM.HBM_grids
 import HBM_grid_data          # offer encapsulated environment for import GridWetData.HBM.HBM_grid_data
+import HBM_data_manager

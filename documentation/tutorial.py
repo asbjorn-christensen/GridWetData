@@ -7,7 +7,7 @@
 #   where the kode is executed
 ###############################################################################
 import os
-import sys; sys.path[1:1] = [os.pardir]   # allow to see this directory from above, if this script is run in source directory
+import sys  
 
 from GridWetData import *                 # import the GridWetData environment
 
@@ -34,8 +34,8 @@ from GridWetData import *                 # import the GridWetData environment
 #
 ###############################################################################
 
-
-dmg = data_manager.DataManager("DMI_data", DMIGrid_3D)  # interface to data base
+from GridWetData.HBM import DataManager, HBMGrid_3D, TemperatureData_3DwithTime
+dmg = DataManager("DMI_data", HBMGrid_3D)  # interface to data base
 tt  = TemperatureData_3DwithTime(dmg)                   # interface to temperature
 
 pos = [4.2083, 56.025, 1.2]  #  lon[deg E], lat[deg N], meters below the sea surface
@@ -61,7 +61,7 @@ print tt(pos, datetime(2015, 05, 20, 00, 36, 00)), " - should give 8.54531238808
 #       Line 6-9 scans down the water column, interpolating salinity along the way
 ###############################################################################
 
-g3D = DMIGrid_3D(       os.path.join("DMI_data", "ns_grid.nc"))  # load this grid
+g3D = HBMGrid_3D(       os.path.join("DMI_data", "ns_grid.nc"))  # load this grid
 g3D.update_sea_level(   os.path.join("DMI_data", "z_ns_2015_05_20_00_15_00.nc")) # manually select frame
 salt = GridData_3D(g3D, os.path.join("DMI_data", "s_ns_2015_05_20_00_15_00.nc")) # manually select frame
 
@@ -81,7 +81,7 @@ for depth in arange(0, cwd, 0.01):
 #       both data and sea level interpolation between time frames 
 ###############################################################################
 
-dmg    = data_manager.DataManager("DMI_data", DMIGrid_3D)   # interface to data base
+dmg    = DataManager("DMI_data", HBMGrid_3D)   # interface to data base
 tt     = TemperatureData_3DwithTime(dmg)                    # interface to temperature
 tframe = tt.snapshot_at(datetime(2015, 05, 20, 00, 16, 00)) # GridData_3D instance 
 
@@ -103,7 +103,7 @@ print "vertical average temperature from layer :", tavg.data[100,200]
 #   and returns corresponding list of interplated values
 ###############################################################################
 
-dmg    = data_manager.DataManager("DMI_data", DMIGrid_3D)   # interface to data base
+dmg    = DataManager("DMI_data", HBMGrid_3D)   # interface to data base
 tt     = TemperatureData_3DwithTime(dmg)
 
 my_mesh = []  # create example mesh
@@ -123,7 +123,7 @@ print data_at_my_mesh
 
 
 
-dmg     = data_manager.DataManager("DMI_data", DMIGrid_3D)   # interface to data base
+dmg     = DataManager("DMI_data", HBMGrid_3D)   # interface to data base
 temp    = TemperatureData_3DwithTime(dmg).snapshot_at(datetime(2015, 05, 20, 00, 16, 00))     
 
 sindex  = derived_layers.StratificationFront(temp) # GridData_2D instance
@@ -140,5 +140,5 @@ ncfile = netcdf.Dataset("test.nc", "w")
 for minute in range(16,20):
     temp    = TemperatureData_3DwithTime(dmg).snapshot_at(datetime(2015, 05, 20, 00, minute, 00))
     sindex  = derived_layers.StratificationFront(temp) # generate 2D data frame
-    sindex.write_data_as_netCDF(ncfile, index=h)       # add frame to file
+    sindex.write_data_as_netCDF(ncfile, index=minute)       # add frame to file
 ncfile.close()
