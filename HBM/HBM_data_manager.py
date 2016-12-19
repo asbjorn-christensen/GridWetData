@@ -72,7 +72,7 @@ class DataManager:
     def __init__(self, path, gclass=str):
         ##  path to directory
         self.path     = path # @var path to directory
-        ##  datasets [PROPTAG] [GRIDTAG] = (times_of_data, files) where time_of_data is a time hash
+        ##  datasets [PROPTAG] [GRIDTAG] = (times_of_data, files, datetime) where time_of_data is a time hash corresponding to datetime
         #            In the plain lists (times_of_data, files), entries correspond pairwise           
         self.datasets = {}
         ## grids [GRIDTAG] = grid descriptors corresponding to GRIDTAG, instantiated by provided instantiator gclass
@@ -115,7 +115,7 @@ class DataManager:
             if not self.datasets.has_key(prop):
                 self.datasets[prop] = {}
             if not self.datasets[prop].has_key(grid):
-                self.datasets[prop][grid] = ([],[])
+                self.datasets[prop][grid] = ([],[],[])
             try:
                 thash = _create_time_hash( datetime(year, month, day, hour, minute, second) )
             except exceptions.ValueError:
@@ -126,7 +126,7 @@ class DataManager:
             ix = searchsorted( self.datasets[prop][grid][0], thash )
             self.datasets[prop][grid][0].insert(ix, thash)
             self.datasets[prop][grid][1].insert(ix, os.path.join(path, fname))  # store full path
-           
+            self.datasets[prop][grid][2].insert(ix, datetime(year, month, day, hour, minute, second))
         #
 
     # ------------------------------------------------------------------------------------
@@ -186,6 +186,18 @@ class DataManager:
         return (fnames[i0], ths[i0]),  (fnames[i1], ths[i1])
         #
 
+    # ---------------------------------------------------------------
+    ## Generator function for looping over data sets in inventory
+    #  Return (time, griddata) pair where time is a date_time instance and griddata is a griddata_class instance
+    #  @param self              The object pointer
+    #  @param griddata_class    spectator class to be applied for grid data
+    #  @param proptag           tag for data property to be looped over
+    #  @param gridtag           tag for grid to be applied
+    def loop_over(self, griddata_class, proptag, gridtag):
+        for item in zip(*self.datasets[proptag][gridtag]):    # (times_of_data, files, datetime)
+            yield item[2], griddata_class(self.grids[gridtag], item[1])
+        
+        
     # ---------------------------------------------------------------
     ## Print inventory lists of grids/griddata sets available to stdout
     #  mainly for debugging
