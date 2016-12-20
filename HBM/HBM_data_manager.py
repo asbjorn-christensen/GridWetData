@@ -17,6 +17,8 @@ from numpy    import *  # searchsorted
 from datetime import *
 import re
 
+import copy                     # for grid copy, notice numpy also provides a copy which is shadowed by this import
+
 _thisdir         = os.path.dirname(__file__)  # allow remote import
 _verbose         = False # True  # log info
 _toffset         = datetime(2000,1,1)
@@ -188,14 +190,20 @@ class DataManager:
 
     # ---------------------------------------------------------------
     ## Generator function for looping over data sets in inventory
+    #  Staggering not supported (ignored)
     #  Return (time, griddata) pair where time is a date_time instance and griddata is a griddata_class instance
     #  @param self              The object pointer
-    #  @param griddata_class    spectator class to be applied for grid data
+    #  @param griddata_class    spectator class to be applied for grid data - must be instantiated as a GridData_3D
     #  @param proptag           tag for data property to be looped over
-    #  @param gridtag           tag for grid to be applied
+    #  @param gridtag           tag for grid to be applied 
     def loop_over(self, griddata_class, proptag, gridtag):
-        for item in zip(*self.datasets[proptag][gridtag]):    # (times_of_data, files, datetime)
-            yield item[2], griddata_class(self.grids[gridtag], item[1])
+        if _verbose: print "load_frame: %s" % fname_data
+        for (thash, fname, dtime) in zip(*self.datasets[proptag][gridtag]):    
+            izf     = self.datasets["z"][gridtag][2].index(dtime) # pick corresponding sea level elevation
+            zfname  = self.datasets["z"][gridtag][1][izf]         # 
+            newgrid = copy.copy(self.grids[gridtag])              # shallow copy of ancestor grid
+            newgrid.update_sea_level(zfname)                
+            yield dtime, griddata_class(newgrid, fname)
         
         
     # ---------------------------------------------------------------
