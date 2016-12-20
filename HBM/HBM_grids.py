@@ -26,7 +26,9 @@ class HBM_wetpoint_data:
         ## set unit from file meta data
         data.unit     = ncfile.unit
         ## set data pad value 
-        data.padvalue = wetptdata[0] # specific convention for this format
+        data.padvalue    = wetptdata[0]        # specific convention for this format
+        data.minwetvalue = wetptdata[1:].min() # specific convention for this format
+        data.maxwetvalue = wetptdata[1:].max() # specific convention for this format
         ncfile.close()
         return data
 
