@@ -26,7 +26,8 @@ import sys
 import os
 import exceptions
 #from   scipy.io import netcdf   # there is a bug in scipy.io.netcdf < 0.12 in writing part, 0.17.0 has a writing issue 
-import netCDF4 as netcdf         # use this API until scipy.io.netcdf is fixed                            
+import netCDF4    as netcdf         # use this API until scipy.io.netcdf is fixed
+from   netcdf_aux import create_netCDF_xyvariable, add_data_to_unlimted_var
 
 from   numpy import *
 import copy                     # for grid copy, notice numpy also provides a copy which is shadowed by this import
@@ -258,12 +259,14 @@ class LonLatGrid:
     ## Write/append data in netCDF format to file fname
     #  @param self          The object pointer.
     #  @param file          File name / NetCDFFile instance for writing data
-    #  @param data          File name provided: write plain 2D array 
+    #                       File name provided: write plain 2D array 
     #                       NetCDFFile instance provided: append data to variable data along unlimited dimension
+    #  @param data          2D data to be written
     #  @param undef         Optional keyword argument:  value of data corresponding to undefined grid points (just passed to netcdf file). Default: None
     #  @param bitmask       Optional keyword argument:  1 for valid points, 0 for undefined grid points. Default: None
     #  @param specification Optional keyword argument:  specification title attribute associated with data. Default: None
     #  @param metadata      Optional keyword argument:  a dictionary passed to global attributes. Default: autotitle
+    #  @param dataParam     Optional keyword argument:  Custom name for data variable. Default: data
     #  @param storage_type  Optional keyword argument:  netcdf API supports these types:          Default: select type corresponding to data <br> 
     #                                                   Supported values: <br> 
     #                                                   'b' : NC_BYTE:   (1 byte)  <br> 
@@ -273,32 +276,25 @@ class LonLatGrid:
     #                                                   'f' : NC_FLOAT:  (4 bytes) <br> 
     #                                                   'd' : NC_DOUBLE: (8 bytes) <br>
     #  @param index         Optional/mandatory keyword argument: value for index (mandatory for append, ignored for write)
-    #
+    #                        
     #  undef/bitmask are overlapping ways of flagging undefined grid points. If both are defined both are written, do not assess consistency
     #  In append mode, optional meta data is not updated, but pertains to all frames in data
-    #  Currently it is hardcoded that the data is stored in netCDF variable "data(nx,ny)" in single frame mode
-    #  and "data(nframes,nx,ny)" indexed by "index(fnframes)" in append mode
-    # 
+    #  Data is stored in netCDF variable "data(nx,ny)" in single frame mode and "data(nframes,nx,ny)" indexed by "index(fnframes)" in append mode
+    #  If dataParam is provided, this variable name is applied instead of default "data"
     def write_data_as_netCDF(self, file, data, **kwargs):
         if isinstance(file, basestring):   # write single frame
             ncfile  = netcdf.Dataset(file, "w")
             kwargs["index"] = None  # suppress append mode
-            self._setup_netCDF_data_set(ncfile, data, **kwargs)
+            self._setup_netCDF_data_set(ncfile, data, **kwargs) # def + write
             ncfile.close()
         elif isinstance(file, netcdf.Dataset):
             if file.dimensions == {}:  # empty set, test also OK for python-netcdf
                 self._setup_netCDF_data_set(file, data, **kwargs) # index mandatory
             else: # assume properly configured
-                self._add_netCDF_data_(file, data, kwargs["index"])  # index mandatory
+                create_netCDF_xyvariable(file, data, False, **kwargs) # reuse old def, if defined (dont capture return)
+                add_data_to_unlimted_var(file, data, **kwargs) # index mandatory
         else:
-            
             raise exceptions.ValueError("argument file inappropriate: file = %s" % str(file))
-
-    # internal method: append data + index along unlimited dimension after last stored frame
-    def _add_netCDF_data_(self, ncfile, data, index):
-        inext                                = ncfile.variables["data"].shape[0]
-        ncfile.variables["data"][inext,:,:]  = data
-        ncfile.variables["index"][inext]     = index
 
           
     # internal method: configure netcdf data set and write data
@@ -312,16 +308,6 @@ class LonLatGrid:
         if kwargs.has_key("undef"):  # Default: None
             ncfile.undef         = kwargs["undef"]
             ncfile.undef_meaning = "value for undefined data points"
-        #
-        if kwargs.has_key("specification"):  # Default: None
-            data_specification = kwargs["specification"]
-        else:
-            data_specification = None
-        #
-        if kwargs.has_key("storage_type"):
-            data_type = kwargs["storage_type"] # do not assess validity
-        else:
-            data_type = data.dtype # Default: apply array type, assume data has dtype attribute
         #
         if kwargs.has_key("bitmask"):
             bitmask = kwargs["bitmask"]
@@ -348,15 +334,10 @@ class LonLatGrid:
         #
         #  --------- create netcdf variables ---------
         #
+        var_data  = create_netCDF_xyvariable(ncfile, data, True, **kwargs)  # overwrite, if exist
         if index is not None: # append mode
             var_index = ncfile.createVariable("index", 'd',       ('nframes',))
-            var_index.specification = "frame index"
-            var_data  = ncfile.createVariable("data",  data_type, ('nframes','nx','ny')) 
-        else:   #  single frame mode
-            var_data = ncfile.createVariable("data", data_type, ('nx','ny'))
-        #
-        if data_specification:
-                var_data.specification = data_specification
+            var_index.specification = "frame index"    
         #
         var_lon0 = ncfile.createVariable('lon0', 'd', ())
         var_lon0.specification = "Western grid edge in degrees"
