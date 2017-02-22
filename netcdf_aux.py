@@ -10,23 +10,41 @@ import os
 _thisdir         = os.path.dirname(__file__)  # allow remote import
 _verbose         = False # True  # log info
 
-## Append data + index along unlimited dimension after last stored frame
+## Return the index of the first occurence of item in vec by == operator
+#  where vec does not have an index method (like a numpy array)
+#  @param item        item to search for
+#  @param vec         listlike to search in (must have a length)
+#  @return            index of item (if found) or None (if not found)
+def find_first(item, vec):
+    for i in range(len(vec)):
+        if item == vec[i]:
+            return i  
+    return None # item not found
+
+
+
+## Inject/Append data + index along unlimited dimension after last stored frame
 #  currently index-name is hardcoded to "index"
 #  @param ncfile        NetCDFFile instance
 #  @param data          2D data to be written
-#  @param index         index value for this data frame
+#  @param index         index value for this data frame (assume index is a unique frame identifier)
 #  @param dataParam     Optional keyword argument:  Custom name for data variable. Default: data
 #  Assumes netcdf variable and index variable is already created
-#
+#  Resolve frame number to write to by checking whether index value exist (frame injection), otherwise append along unlimited dimension
 def add_data_to_unlimted_var(ncfile, data, **kwargs):
     if kwargs.has_key("dataParam"):  # Default: data
         dname = kwargs["dataParam"]  # apply custom data variable name
     else:
         dname = "data"               # default data variable name
-    index                                = kwargs["index"] # mandatory keyword argument
-    nextpos                              = ncfile.variables[dname].shape[0]
-    ncfile.variables[dname][nextpos,:,:] = data
-    ncfile.variables["index"][nextpos]   = index
+    index_value                     = kwargs["index"] # mandatory keyword argument
+    # --- resolve frame writing position ---
+    writepos = find_first(index_value, ncfile.variables["index"])
+    if writepos is None:                                        # index_value unique ...
+        writepos = ncfile.variables["index"].shape[0]           # ... therefore append frame
+        ncfile.variables["index"][writepos]  = index_value      # and store new index_value
+    #
+    ncfile.variables[dname][writepos,:,:] = data                # inject/append data
+    #
 
 
 ## Create NetCDF variable in open NetCDFFile

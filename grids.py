@@ -275,7 +275,8 @@ class LonLatGrid:
     #                                                   'i' : NC_INT:    (4 bytes) <br> 
     #                                                   'f' : NC_FLOAT:  (4 bytes) <br> 
     #                                                   'd' : NC_DOUBLE: (8 bytes) <br>
-    #  @param index         Optional/mandatory keyword argument: value for index (mandatory for append, ignored for write)
+    #  @param index         Optional/mandatory keyword argument: value for index (mandatory for append/inject, ignored for write)
+    #                                                            index should be a unique identifier for data frame
     #                        
     #  undef/bitmask are overlapping ways of flagging undefined grid points. If both are defined both are written, do not assess consistency
     #  In append mode, optional meta data is not updated, but pertains to all frames in data
