@@ -57,6 +57,11 @@
 !       2 sediment variables refer to as
 !                   SPM_sed1(i,j)=sed(1,id3d(jm+1-j,i,1))/scale               
 !                   SPM_sed2(i,j)=sed(2,id3d(jm+1-j,i,1))/scale
+!
+!       -------------------------------------- updates --------------------------------------
+!
+!       May 18, 2017: DMI dump format has changed, so unformatted files need to be opened with access='stream'         
+!          
 !========================================================================================================================  
 !       Linux build : 
 !            ifort -o burstHBM -convert big_endian -e90 -I/usr/local/include -L/usr/local/lib -lnetcdff -lnetcdf  burst_HBM_ergom_output.f90
@@ -199,7 +204,15 @@
 !       ----------------------------------------------------------------------
 
         call getarg(2, ifilename)         ! 0 is program name
-        open(11,file=ifilename,form='unformatted', status='old', iostat=ios)
+!        
+!       ... format prior to May 18, 2017, use this open statement
+!        
+!        open(11,file=ifilename,form='unformatted', status='old', iostat=ios)
+!        
+!       ... format after to May 18, 2017, use this open statement
+!         
+        open(11,file=ifilename,form='unformatted', status='old', iostat=ios, access='stream')
+        
         if(ios/=0) goto 800
         write(*,*) action, trim(adjustl(ifilename))
         
