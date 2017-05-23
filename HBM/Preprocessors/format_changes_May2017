@@ -1,0 +1,143 @@
+Hej Asbjørn.
+
+
+
+Allocate statements ser således ud:
+
+      allocate( eco_i4(narea), ben_i4(narea) )
+      do ia=1,narea
+        allocate( eco_i4(ia)%p(0:iw3(ia),1:ntbio),                             &
+i                      ben_i4(ia)%p(0:iw2(ia),1:ntben) )
+      enddo
+
+Open statement ser således ud:
+
+        open(lunbiodat,file=tdnam,form='unformatted',status='replace',         &
+             action='write',asynchronous='yes',access='stream',iostat=ios)
+
+Write statements ser således ud:
+
+    write(lunbiodat,iostat=ios) aufdat
+    write(lunbiodat,iostat=ios) ctim,tim
+
+    write(lunbiodat) eco_i4(ia)%p
+    write(lunbiodat) ben_i4(ia)%p
+
+
+Når jeg senere skal læse data har jeg en 'lpermute' switch,
+så jeg både kan klare gl og nyt format.
+
+Allokering:
+
+  if (lpermute) then
+    do ia=1,narea
+      allocate( eco(ia)%p(0:iw3(ia),1:ntbio), ben(ia)%p(0:iw2(ia),1:ntben),    &
+                eco_i4(ia)%p(0:iw3(ia),1:ntbio), ben_i4(ia)%p(0:iw2(ia),1:ntben) )
+    enddo
+  else
+    do ia=1,narea
+      allocate( eco(ia)%p(1:ntbio,0:iw3(ia)), ben(ia)%p(1,0:iw2(ia)),            &
+                eco_i4(ia)%p(1:ntbio,0:iw3(ia)), ben_i4(ia)%p(1,0:iw2(ia)) )
+    enddo
+  endif
+
+
+Læsning:
+
+  read(lun) aufdat
+  read(lun,iostat=ios) ctim,tim
+  ! read vars from biodat file:
+  do ia=1,narea
+    read(lun,iostat=ios) eco_i4(ia)%p
+    read(lun,iostat=ios) ben_i4(ia)%p
+  enddo
+
+
+Så skal de pakkes ud:
+
+
+    if (lpermute) then
+      do ia=1,narea
+        call wcomptr_per( iw3(ia),eco(ia)%p,eco_i4(ia)%p )
+      enddo
+    else
+      do ia=1,narea
+        call wcomptr( iw3(ia),eco(ia)%p,eco_i4(ia)%p )
+      enddo
+    endif
+
+
+
+og de to rutiner ser sådan her ud:
+
+Original:
+ 
+subroutine wcomptr( iwet3,eco,eco_i4 )
+  !----------------------------------------------------------------------------+
+  !
+  !     compresses the calculated data
+  !
+  !----------------------------------------------------------------------------+
+
+    implicit none
+
+    integer, intent(in)                 :: iwet3
+    real(8), intent(out)                :: eco(1:,0:)
+    integer, intent(in),dimension(:,0:) :: eco_i4
+
+    real(8), parameter :: ecoscal = 1.e-4_8, zero = 0.0_8
+
+    integer :: i
+
+    eco(:,0)  = zero
+
+    do i=0,iwet3
+      eco(:,i) = eco_i4(:,i)*ecoscal
+    enddo
+
+  end subroutine wcomptr
+
+
+Permuted:
+
+  subroutine wcomptr_per( iwet3,eco,eco_i4 )
+  !----------------------------------------------------------------------------+
+  !
+  !     compresses the calculated data
+  !     permuted version
+  !
+  !----------------------------------------------------------------------------+
+
+    implicit none
+
+    integer, intent(in)                 :: iwet3
+    real(8), intent(out)                :: eco(0:,1:)		! <----
+    integer, intent(in),dimension(0:,1:) :: eco_i4		! <----
+
+    real(8), parameter :: ecoscal = 1.e-4_8, zero = 0.0_8
+
+    integer :: i
+
+    eco(0,:)  = zero						! <----
+
+    do i=0,iwet3
+      eco(i,:) = eco_i4(i,:)*ecoscal				! <----
+    enddo
+
+  end subroutine wcomptr_per
+
+
+Når man senere tilgår data skal der byttes om på indices, fx:
+
+             if (lpermute) then
+                  f1 = eco(ia)%p(1,ieco)
+              else
+                  f1 = eco(ia)%p(ieco,1)
+              endif
+
+
+Har du brug for en tarball af den operationelle kode?
+Det er svn version 17521.
+
+
+mvh jacob wn
