@@ -405,7 +405,7 @@ class LonLatZGrid(LonLatGrid):
     #  @param lat0   Meridional zero, corresponding to y=0
     #  @param dlon   Zonal grid spacing
     #  @param dlat   Meridional grid spacing
-    #  @param cellw0[nx,ny,nz]  reference thickness of cells
+    #  @param cellw0[nx,ny,nz]  reference thickness of cells (cellw0[i,j,k] < 0 <=> cell(i,j,k) dry)
     #
     #  grid is initialized corresponding to sea level elevation = 0
     #
@@ -420,7 +420,7 @@ class LonLatZGrid(LonLatGrid):
     
     # -------------------------------------------------
     ## Set static auxillaries attributes from reference cell thickness cellw0_in
-    #  Dry cells are signalled by cellw0_in <= 0
+    #  Dry cells are signalled by cellw0_in < 0 (allow skin cells with cellw0==0)
     #  @param self                 The object pointer.
     #  @param cellw0_in[nx,ny,nz]  reference thickness of cells
     #
@@ -428,14 +428,14 @@ class LonLatZGrid(LonLatGrid):
         nx,ny,nz = self.nx, self.ny, self.nz
         assert cellw0_in.shape == (nx,ny,nz)
         ## wetmask[ix,iy,iz] = 1/0 if cell is wet/dry
-        self.wetmask = where(cellw0_in>0, 1, 0)
+        self.wetmask = where(cellw0_in < 0, 0, 1)   # dry cells are signalled by stricktly negative values of cellw0_in
         ## cellw0[ix,iy,iz] provided reference cell thickness at cell center line (x,y) = (ix,iy) for cell iz
         self.cellw0  = where(cellw0_in>0, cellw0_in, 0.0) # set cellw0 = 0 for dry cells here after      
         #
         layer_sep0 = 1.0*self.cellw0 # force copy
         for iz in range(1,nz):
             layer_sep0[:,:,iz] = layer_sep0[:,:,iz-1] + self.cellw0[:,:,iz]
-        ## layer_sep[ix,iy,iz] is the dynamic depth of the boundary if layers (iz, iz+1) at cell center (ix,iy)
+        ## layer_sep[ix,iy,iz] is the dynamic depth of the boundary for layers (iz, iz+1) at cell center (ix,iy)
         self.layer_sep0 = layer_sep0
         #
         bottom_layer = sum( self.wetmask, axis=2) - 1 # assume wet layers contiguous from surface and down
@@ -521,7 +521,7 @@ class LonLatZGrid(LonLatGrid):
         #     to identify (iz,izp1,sz). 
         #
         iz = izp1 = 0
-        ccd_last  = -1e-3 # above sea surface
+        ccd_last  = -1e-8 # above sea surface
         while iz <= self.bottom_layer[ixc,iyc]:
             # ccd is the layer center depth of layer iz, interpolated to horizontal position pos[:2]
             ccd = LonLatGrid.interpolate_data_from_grid_coordinates(self, self.ccdepth[:,:,iz], ix,iy,ixp1,iyp1,sx,sy)
