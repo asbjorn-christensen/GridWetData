@@ -27,7 +27,7 @@ import os
 import exceptions
 #from   scipy.io import netcdf   # there is a bug in scipy.io.netcdf < 0.12 in writing part, 0.17.0 has a writing issue 
 import netCDF4    as netcdf         # use this API until scipy.io.netcdf is fixed
-from   netcdf_aux import create_netCDF_xyvariable, add_data_to_unlimted_var
+from   netcdf_aux import create_netCDF_xyvariable, add_data_to_unlimted_var, write_lonlatdata_in_COARDS_format
 
 from   numpy import *
 import copy                     # for grid copy, notice numpy also provides a copy which is shadowed by this import
@@ -372,7 +372,24 @@ class LonLatGrid:
             var_data[:,:] = data
         # 
         
-        
+    #  -----------------------------------------------------
+    ## Write/append 2D data in netCDF COARDS compliant format to file fname
+    #  @param self     The object pointer
+    #  @param file     file name / open netcdf file; if file name, new netcdf data set is created 
+    #  @param data     2D array (numpy like) to be written
+    #  @param metadata to be attached; see write_lonlatdata_in_COARDS_format for requirements/options
+    def write_data_as_COARDS(self, file, data, **metadata):
+        metacopy = copy.copy(metadata) # shallow, avoid modifying metadata
+        metacopy['lon'] = self.lon0 + self.dlon*arange(self.nx)
+        metacopy['lat'] = self.lat0 + self.dlat*arange(self.ny)
+        if isinstance(file, basestring):  
+            ncfile  = netcdf.Dataset(file, "w")
+            write_lonlatdata_in_COARDS_format(ncfile, data, metacopy)
+            ncfile.close()
+        elif isinstance(file, netcdf.Dataset):
+            write_lonlatdata_in_COARDS_format(file, data, metacopy)
+        else:
+            raise exceptions.ValueError("argument file inappropriate: file = %s" % str(file))
     
     
 # -------------------------------------------------------------------------------------------

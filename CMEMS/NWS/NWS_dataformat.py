@@ -51,7 +51,7 @@ def _to_datetime(thash):
     #  ------------------------------------------------------------
     ## convert timehash scalar to datetime object
     #  ------------------------------------------------------------
-    return _time_offset + timedelta(seconds=thash)
+    return _time_offset + timedelta(seconds=int(thash))
 
 
 

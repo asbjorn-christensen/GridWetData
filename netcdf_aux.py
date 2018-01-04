@@ -6,6 +6,8 @@
 #        
 #######################################################################################################################
 import os
+import exceptions
+from numpy import *
 
 _thisdir         = os.path.dirname(__file__)  # allow remote import
 _verbose         = False # True  # log info
@@ -96,4 +98,102 @@ def create_netCDF_xyvariable(ncfile, data, verbose, **kwargs):
         var_data.specification = data_specification
     # 
     return var_data
-    
+
+
+
+## Write a NetCDF variable in open NetCDFFile according to COARDS format
+#  @param ncfile        NetCDFFile instance
+#  @param data          2D data to be written (numpy like)
+#  @metadata            metadata for variable (mandatory: lon, lat, variable_name, units, long_name)
+def write_lonlatdata_in_COARDS_format(ncfile, data, metadata):   
+    # dump data(nlon,nlat) corresponding to data on a positively oriented,
+    # uniformly spaced lon-lat grid to open netcdf file ncfile
+    # metadata is a dictionary that must contain at least these entries
+    #  lon:          longitude grid 
+    #  lat:          latitude  grid
+    #  variable_name: variablename to be used for data 
+    #  long_name:    long title for variable_name (attribute associated with variable)
+	#  units:        units for data (standard conformance not assessed; attribute associated with variable)
+    #  Global attributes must be in entry global_attributes - all other attributes
+    #  are assumed to be variable attributes
+    #  -----------------------------------------------------------------------------------------
+    if ncfile.dimensions.has_key('lon'): # lon dimension exist, check size
+        assert ncfile.dimensions['lon'].size == size(metadata["lon"])
+    else:
+        ncfile.createDimension('lon', size(metadata["lon"]))
+    # ---- 
+    if ncfile.dimensions.has_key('lat'): # lat dimension exist, check size
+        assert ncfile.dimensions['lat'].size == size(metadata["lat"])
+    else:
+        ncfile.createDimension('lat', size(metadata["lat"]))
+    # ----     
+    if not ncfile.variables.has_key('lon'): # if exist, assume OK and do not redefine
+        lon = ncfile.createVariable('lon', 'd', ('lon',))
+        lon.long_name      = "Uniformly spaced longitudes"
+        lon.cartesian_axis = "X" 
+        lon.units          = "degrees_E" 
+        lon.ipositive      = 1 
+        lon[:] = metadata['lon']
+    # ----     
+    if not ncfile.variables.has_key('lat'): # if exist, assume OK and do not redefine
+        lat = ncfile.createVariable('lat', 'd', ('lat',))
+        lat.latg_name      = "Uniformly spaced latitudes"
+        lat.cartesian_axis = "Y" 
+        lat.units          = "degrees_N" 
+        lat.ipositive      = 1 
+        lat[:] = metadata['lat']
+    #
+    if not ncfile.variables.has_key(metadata['variable_name']): # if exist, assume OK and do not redefine
+        var = ncfile.createVariable(metadata['variable_name'], data.dtype, ('lon','lat')) 
+    var[:] = data
+    # dump meta data
+    # check mandatory metadata - remaining mandatory keys generate other exceptions, if not present
+    if not metadata.has_key('units'):
+        raise exceptions.KeyError("metadata has no unit entry")
+    if not metadata.has_key('long_name'):    
+        raise exceptions.KeyError("metadata has no long_name entry")
+    # ------ global attributes ------
+    ncfile.Conventions = "COARDS"
+    if metadata.has_key('global_attributes'):
+        gattr = metadata['global_attributes']
+        for key in gattr.keys():
+            setattr(ncfile, key, gattr[key])
+    # ------ variable attributes ------
+    for key in metadata.keys():
+        if key in ('lon', 'lat', 'variable_name', 'global_attributes'): # these are handled above
+            continue
+        if key == 'units':
+            var.units = metadata['units']
+            continue
+        if key == 'long_name':
+            var.long_name = metadata['long_name']
+            continue
+        # all other metadata stored as global attributes
+        setattr(var, key, metadata[key])
+
+
+# ========================================================================
+#                     self test section
+# ========================================================================
+if __name__ == "__main__":
+    import netCDF4    as netcdf
+    from numpy import *
+    ncf = netcdf.Dataset("test.nc", "w")
+    lon = arange(1, 3, 0.22)
+    lat = arange(10, 13, 0.52)
+    nx,ny = (size(lon),size(lat))
+    var = random.random((nx,ny))
+    meta = {'lon':lon,
+            'lat':lat,
+            'variable_name':'georg',
+            'long_name': "GyroGearloose",
+            'units':"Gy",
+            'global_attributes': {'history': 'xxx'}}
+    write_lonlatdata_in_COARDS_format(ncf, var, meta)
+    # --- dump second variable in same set
+    meta['variable_name'] = 'mask'
+    meta['long_name']     = 'maskmask'
+    meta['global_attributes'] = {'morehistory': 'xxx'} 
+    write_lonlatdata_in_COARDS_format(ncf, ones((nx,ny), int), meta)
+    ncf.close()
+    #

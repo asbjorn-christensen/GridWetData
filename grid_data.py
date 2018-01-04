@@ -108,11 +108,11 @@ class GridData:
     def write_data(self, fname, **kwargs):
         (root, ext) = os.path.splitext(fname)
         if ext.lower() == ".nc":
-            self.grid.write_data_as_netCDF(fname, self.data, **kwargs) # do not parse kwargs
+            self.grid.write_data_as_COARDS(fname, self.data, **kwargs) # do not parse kwargs
         else:
             raise exception.ValueError("Filename extension in %s does not map to a writing method" % fname)
 
-    ## Specific writer for netcdf - delegate write request to grid
+    ## Specific writer for netcdf (AnchorLab variant) - delegate write request to grid
     #  @param self   The object pointer.
     #  @param fname  File name / file pointer
     #  @param kwargs other optional arguments (parsed on format basis)    

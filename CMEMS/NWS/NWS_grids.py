@@ -19,7 +19,7 @@ import NWS_dataformat
 
 
 # ==============================================================================
-## 2D surface wet point NWS grid
+## 2D surface/at-depth  NWS grid
 class NWSGrid_2D(LonLatGrid):
     #  -----------------------------------------------------
     ## constructor from file data
@@ -35,7 +35,7 @@ class NWSGrid_2D(LonLatGrid):
         #
         LonLatGrid.__init__(self,  nx, ny, lon0, lat0, dlon, dlat)
         #
-    
+        
 
 #  =====================================================================
 ## 3D  NWS grid
