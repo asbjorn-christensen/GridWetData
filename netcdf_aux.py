@@ -106,21 +106,23 @@ def create_netCDF_xyvariable(ncfile, data, verbose, **kwargs):
 #  @param ncfile        NetCDFFile instance
 #  @param data          2D data to be written (numpy like)
 #  @metadata            metadata for variable (mandatory: lon, lat, variable_name, units, long_name)
-def write_lonlatdata_in_COARDS_format(ncfile, data, metadata):   
+#  @writeopt            (optional) write options specified by keyword
+def write_lonlatdata_in_COARDS_format(ncfile, data, metadata, **writeopt):   
     # dump data(nlon,nlat) corresponding to data on a positively oriented,
     # uniformly spaced lon-lat grid to open netcdf file ncfile
-    # metadata is a dictionary that must contain at least these entries
-    # data is transposed, corresponding to COARDS
-    #  lon:          longitude grid 
-    #  lat:          latitude  grid
-    #  [depth:       depth grid ]   (optional)
-    #  [time:        time  grid ]   (optional)
-    #  variable_name: variablename to be used for data 
-    #  long_name:    long title for variable_name (attribute associated with variable)
-	#  units:        units for data (standard conformance not assessed; attribute associated with variable)
-    #  Global attributes must be in entry global_attributes - all other attributes
-    #  are assumed to be variable attributes
-    #  COARDS notes: dimensions should appear in the relative order T, then Z, then Y, then X in the CDL
+    # data is transposed on writing, corresponding to COARDS axis requirements
+    # metadata is a dictionary that must contain at least these entries: 
+    #   lon:          longitude grid 
+    #   lat:          latitude  grid
+    #   [depth:       depth grid ]   (optional)
+    #   [time:        time  grid ]   (optional)
+    #   variable_name: variablename to be used for data 
+    #   long_name:    long title for variable_name (attribute associated with variable)
+	#   units:        units for data (standard conformance not assessed; attribute associated with variable)
+    # Global attributes must be in entry global_attributes - all other attributes
+    # are assumed to be variable attributes
+    # currently no options are captured from writeopt
+    # COARDS notes: dimensions should appear in the relative order T, then Z, then Y, then X in the CDL
     #  -----------------------------------------------------------------------------------------
     if ncfile.dimensions.has_key('lon'): # lon dimension exist, check size
         assert ncfile.dimensions['lon'].size == size(metadata["lon"])

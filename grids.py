@@ -376,18 +376,18 @@ class LonLatGrid:
     ## Write/append 2D data in netCDF COARDS compliant format to file fname
     #  @param self     The object pointer
     #  @param file     file name / open netcdf file; if file name, new netcdf data set is created 
-    #  @param data     2D array (numpy like) to be written
+    #  @param data     2D array (numpy like) to be written, array order (x,y)
     #  @param metadata to be attached; see write_lonlatdata_in_COARDS_format for requirements/options
-    def write_data_as_COARDS(self, file, data, **metadata):
+    def write_data_as_COARDS(self, file, data, metadata, **kwargs):
         metacopy = copy.copy(metadata) # shallow, avoid modifying metadata
         metacopy['lon'] = self.lon0 + self.dlon*arange(self.nx)
         metacopy['lat'] = self.lat0 + self.dlat*arange(self.ny)
         if isinstance(file, basestring):  
             ncfile  = netcdf.Dataset(file, "w")
-            write_lonlatdata_in_COARDS_format(ncfile, data, metacopy)
+            write_lonlatdata_in_COARDS_format(ncfile, data, metacopy, **kwargs) 
             ncfile.close()
         elif isinstance(file, netcdf.Dataset):
-            write_lonlatdata_in_COARDS_format(file, data, metacopy)
+            write_lonlatdata_in_COARDS_format(file, data, metacopy, **kwargs)
         else:
             raise exceptions.ValueError("argument file inappropriate: file = %s" % str(file))
     

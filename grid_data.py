@@ -101,14 +101,20 @@ class GridData:
     #  ============== generic writers ==============
     
     ## Write layer front end
-    #  Delegate write request to grid, depending on filename extension 
+    #  Delegate write request to grid, depending on filename extension (currently only netcdf hook)
     #  @param self   The object pointer.
     #  @param fname  File name for writing data. Resolve writing format from fname extension
     #  @param kwargs other optional arguments (parsed on format basis)
     def write_data(self, fname, **kwargs):
         (root, ext) = os.path.splitext(fname)
         if ext.lower() == ".nc":
-            self.grid.write_data_as_COARDS(fname, self.data, **kwargs) # do not parse kwargs
+            kwargs = copy.copy(kwargs) # do not mangle original arg
+            if kwargs.has_key("netcfd_attr"):
+                netcfd_attr = kwargs["netcfd_attr"]
+                del kwargs["netcfd_attr"]
+            else:
+                netcfd_attr = {}
+            self.grid.write_data_as_COARDS(fname, self.data, netcfd_attr, **kwargs) # do not parse kwargs
         else:
             raise exception.ValueError("Filename extension in %s does not map to a writing method" % fname)
 
