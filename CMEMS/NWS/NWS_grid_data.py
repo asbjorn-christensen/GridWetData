@@ -55,7 +55,8 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
             self.ncfile.close()
         except:
             pass
-      
+    def close(self):
+        self.ncfile.close()
         
     ## --------------------------------------------------------------------
     ## Generate a informative string representation of object
