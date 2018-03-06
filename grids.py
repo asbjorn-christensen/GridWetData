@@ -382,6 +382,7 @@ class LonLatGrid:
         metacopy = copy.copy(metadata) # shallow, avoid modifying metadata
         metacopy['lon'] = self.lon0 + self.dlon*arange(self.nx)
         metacopy['lat'] = self.lat0 + self.dlat*arange(self.ny)
+        kwargs['data_layout']  = "xy"   # modifying kwargs does not affect calling context
         if isinstance(file, basestring):  
             ncfile  = netcdf.Dataset(file, "w")
             write_lonlatdata_in_COARDS_format(ncfile, data, metacopy, **kwargs) 

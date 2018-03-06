@@ -22,15 +22,16 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
     #  -----------------------------------------------------
     ## constructor
     #  Data is first loaded at interpolation time, when time argument is available
+    #  spectator class to view a netcdf data set with time dimension
     #  @param self      The object pointer
     #  @param fname     netcdf data set file name  
     #  @param varname   variable name to look for (optional)
     #                   If absent (and class attributre prop is not set) the data set
     #                   is scanned for known variable names
     def __init__(self, fname, varname=None):
-        self.grid   = NWSGrid_3D(fname)
         self.fname  = fname
         self.ncfile = NWS_dataformat.NWSDataSet(fname)
+        self.grid   = NWSGrid_3D(fname)
         # resolve property attribute prop
         if varname is None:
             if hasattr(self, "prop"):
@@ -48,7 +49,7 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
             assert self.ncfile.has_variable(varname) # check solicited data is present
             
         ## datetime instance corresponding to current cache content (None for empty cache)
-        self.when_last = None # empty cache
+        self.when_last = None # empty interpolation cache
         
     def __del__(self):
         try:
@@ -86,6 +87,8 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
         g3D.time_frame = ifr
         g3D.time       = self.ncfile.get_time(ifr)
         return g3D
+        
+        
         
     # --------------------------------------------------------------
     ## Load data corresponding to datetime instance argument when, if necessary, to cache
