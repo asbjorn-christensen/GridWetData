@@ -33,7 +33,7 @@ from   numpy import *
 import copy                     # for grid copy, notice numpy also provides a copy which is shadowed by this import
 from   datetime import *
 import re
-
+from constants import EarthMeanRadius, deg2rad
 
 _thisdir         = os.path.dirname(__file__)  # allow remote import
 _verbose         = False # True  # log info
@@ -101,7 +101,12 @@ class LonLatGrid:
         self.dlon = dlon
         ## Meridional grid spacing
         self.dlat = dlat
-        
+
+    #  ---------------------------------------------------------------------------------
+    ## to avoid distinguishing 2D/3D grids, have this behavior    
+    def export_horizontal_grid(self):
+        return self
+    
     #  ---------------------------------------------------------------------------------
     ## unrestricted horizontal coordinate transformation from grid coordinates to lon,lat
     #  @param self   The object pointer
@@ -253,7 +258,15 @@ class LonLatGrid:
         y0 = self.lat0
         y1 = self.lat0 + (self.ny-1)*self.dlat + 1.0e-12 # include this point
         return mgrid[x0:x1:self.dlon, y0:y1:self.dlat]
+    ## provide cell areas in m2 with same layout as data
+    #
+    def get_cell_areas(self):
+        y  = self.lat0 + arange(self.ny)*self.dlat                   # vector(ny)
+        dx = EarthMeanRadius*cos(y*deg2rad)*self.dlon*deg2rad        # vector(ny)
+        dy = EarthMeanRadius*self.dlat*deg2rad*ones(self.nx, float)  # vector(nx)
+        return outer(dy,dx) # NB notice flip
     
+        
     # ==================================================== writers ===================================================
     #
     ## Write/append data in netCDF format to file fname
