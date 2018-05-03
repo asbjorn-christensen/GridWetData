@@ -6,7 +6,7 @@
 #######################################################################
 from numpy import *
 #  ---------------------------------------------------------------------------------
-## Generate a stratification front index
+## Generate a stratification front index of any griddata object
 #  Relatively crude algorithm algortihm, looking at absolute surface-bottom
 #  difference, and taking an isotropic, non-cerntered absolute gradient
 #  TODO: Apply a natural scale to the index; currently, the frontal index is not scaled
@@ -26,3 +26,4 @@ def StratificationFront(obj, padval = 0):
                          abs(strat[1:-1, 0:-2]-strat[1:-1, 1:-1]) + \
                          abs(strat[1:-1, 2:  ]-strat[1:-1, 1:-1])
     return tsurf.__class__(tsurf.grid, dstrat) # inherit grid
+

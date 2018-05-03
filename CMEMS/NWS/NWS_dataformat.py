@@ -226,7 +226,8 @@ class NWSDataSet:
         ## return datetime corresponding to frame itime 
         return _to_datetime(self.timehash[itime])
     
-
+    def get_number_of_frames(self, vname):
+        return len(self.ncf.variables[vname])
         
         
 #################### self test #########################

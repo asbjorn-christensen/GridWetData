@@ -199,7 +199,7 @@ class LonLatGrid:
     # @param arr2D[nx,ny] 2D array, where pos is interpolated
     # @param deriv whether or not to take derivative wrt. (lam,phi) og result
     #         deriv=0 -> interpolation of f at pos = (lam,phi)
-    #         deriv=1 -> spatial gradioent of f at pos = (lam,phi) df = [df_dl, df_dl]
+    #         deriv=1 -> spatial gradient of f at pos = (lam,phi) df = [df_dl, df_dl]
     # @return data interpolated at pos
     # 
     def interpolate_data(self, arr2D, pos, deriv=0):

@@ -30,15 +30,15 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
     #                   is scanned for known variable names
     def __init__(self, fname, varname=None):
         self.fname  = fname
-        self.ncfile = NWS_dataformat.NWSDataSet(fname)
+        self.ncfdata = NWS_dataformat.NWSDataSet(fname)
         self.grid   = NWSGrid_3D(fname)
         # resolve property attribute prop
         if varname is None:
             if hasattr(self, "prop"):
-                assert self.ncfile.has_variable(self.prop) # check solicited data is present
+                assert self.ncfdata.has_variable(self.prop) # check solicited data is present
             else: # look for known variable names - pick first match
                 for prop in NWS_dataformat.NWS_variablenames_3D.values():
-                    if self.ncfile.has_variable(prop):
+                    if self.ncfdata.has_variable(prop):
                         self.prop = prop
                         break
                 else: 
@@ -46,18 +46,18 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
                     raise exceptions.ValueError(msg)
         else: # an explicit varname has bben provided
             self.prop = varname  
-            assert self.ncfile.has_variable(varname) # check solicited data is present
+            assert self.ncfdata.has_variable(varname) # check solicited data is present
             
         ## datetime instance corresponding to current cache content (None for empty cache)
         self.when_last = None # empty interpolation cache
         
     def __del__(self):
         try:
-            self.ncfile.close()
+            self.ncfdata.close()
         except:
             pass
     def close(self):
-        self.ncfile.close()
+        self.ncfdata.close()
         
     ## --------------------------------------------------------------------
     ## Generate a informative string representation of object
@@ -82,13 +82,17 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
     #
     def load_frame(self, ifr):
         if _verbose: print "load_frame: loading frame %d" % ifr
-        data = self.ncfile.get_time_frame(self.prop, ifr)
+        data = self.ncfdata.get_time_frame(self.prop, ifr)
         g3D  = GridData_3D(self.grid, data) # do not copy grid, which is static
         g3D.time_frame = ifr
-        g3D.time       = self.ncfile.get_time(ifr)
+        g3D.time       = self.ncfdata.get_time(ifr)
         return g3D
-        
-        
+
+    ## Inquire number of time frames in current data set for this variable
+    #  @param self       The object pointer
+    #
+    def get_number_of_frames(self): 
+        return self.ncfdata.get_number_of_frames(self.prop)
         
     # --------------------------------------------------------------
     ## Load data corresponding to datetime instance argument when, if necessary, to cache
@@ -97,7 +101,7 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
     #  @param self     The object pointer
     #  @param when     datetime instance, which cache should be correspond to
     def update_cache(self, when):   
-        bracket = self.ncfile.get_time_interpolation_bracket(when)
+        bracket = self.ncfdata.get_time_interpolation_bracket(when)
         if bracket is None:
             msg = "update_cache: when = %s is not interior for data set %s" % (str(when), self.fname)
         else:
