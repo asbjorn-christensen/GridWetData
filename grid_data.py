@@ -4,6 +4,8 @@
 #        @package grid_data
 #        Light weight generic data grid classes, which are independed on grid specifics
 #
+#        2D means horizontal
+#        3D means horizontal+vertical
 ##########################################################################################
 
 from grids import * 
@@ -98,6 +100,12 @@ class GridData:
     ## redirect call hook in class scope
     __call__ = interpolate
     
+    #  ============== whole array operations ==============
+    ## gradient of field - delegated to grid
+    def gradient(self):
+        grad = self.grid.gradient(self.data)
+        return GridVector(self.grid, grad) # a GridVector type
+    
     #  ============== generic writers ==============
     
     ## Write layer front end
@@ -124,11 +132,89 @@ class GridData:
     #  @param kwargs other optional arguments (parsed on format basis)    
     def write_data_as_netCDF(self, fname,  **kwargs):
         self.grid.write_data_as_netCDF(fname, self.data, **kwargs) # do not parse kwargs
+
+
+        
+class GridVector:
+    #  -----------------------------------------------------
+    ## Dual constructor of vector property ocean data snapshot
+    #  All vector components pertain to same grid (i.e. no staggering for this class)
+    #  Sea level is assumed updated in the passed grid (if it is a 3D grid type),
+    #  grid data inputarg is either a suitable array (with shape consistent with grid, vector dimension is leading dimension)
+    #  or a file name (if argument is a string type), which is passed to the grid data loader (load_vector_frame) 
+    #  It is a user responsibility to ensure consistence between passed grid and provided data / data file
+    #  @param self      The object pointer.
+    #  @param grid      grid instance corresponding to data in fname
+    #  @param inputarg  either a file name (if string type) of data, or a suitable data array (if not string type), corresponding to grid
+    #  
+    def __init__(self, grid, inputarg):
+        ## grid instance corresponding to data
+        self.grid      = grid  # do not copy
+        #
+        #     split behavior depending on inputarg
+        #     test wheter inputarg argument is a string type - if so, assume
+        #     it is a file name and pass it to the grid data loader
+        #     otherwise assume it is a suitable data array ()
+        #     Only set file_name, if provided
+        #
+        if isinstance(inputarg, basestring): # assume inputarg is a file name    
+            ## data buffer
+            self.data      = self.grid.load_vector_frame(inputarg)
+            ## file name corresponding to data (if provided, other wise not set)
+            self.file_name = inputarg
+        else:  # do not set file_name attribute
+            ## data buffer
+            self.data      = inputarg # assume it is a suitable data instance
+
+    #  -----------------------------------------------------
+    ## interpolate single space point pos
+    #  @param  self   The object pointer.
+    #  @param  pos  any sequence (lon, lat, at_depth)
+    #  @return interpolated values
+    #
+    def _interpolate_single(self, pos):
+        buffer = []
+        for vdat in self.data:
+            buffer.append(self.grid.interpolate_data(vdat, pos))
+        return array(buffer, float)
+
+    #  -----------------------------------------------------
+    ## interpolate flat array of posistions pos[n,3]
+    #  @param  self The object pointer.
+    #  @param  pos  any nested sequence pos[n,3] of n positions, where a position correspond to (lon, lat, at_depth)
+    #  @return array of interpolated values; shape = (n, vectordim)
+    #
+    def _interpolate_array(self, allpos):
+        # --- pos must respond to numpy protocol
+        buffer  = []
+        for i,xyz in enumerate(allpos):
+            buffer.append(self._interpolate_single(xyz))
+        return array(buffer, float) # shape = (n, vectordim)
+
+    #  -----------------------------------------------------
+    ## spatial interpolation frontend, that delegates
+    #  to vector/array interpoaltion
+    #  @param  self The object pointer.
+    #  @param  pos  any nested sequence (pos[n,3] of n positions (lon, lat, at_depth), or a single position as (lon, lat, at_depth)
+    #  @return single/array of interpolated values
+    #
+    def interpolate(self, pos):
+        if  has_rank_2(pos):
+            return self._interpolate_array(pos)
+        else:
+            return self._interpolate_single(pos)
+
+    ## redirect call hook in class scope
+    __call__ = interpolate
+    #
+    #  ============== whole array operations ==============
     
-
-
-
     
+    
+    #  ============== generic writers ==============
+    #  currently no generic writers defined
+
+
 # ==============================================================================
 ## Sub class of GridData for 2-dimensional situations (currently void)
 class GridData_2D(GridData):
@@ -150,8 +236,8 @@ class GridData_3D(GridData):
     #  @param  self The object pointer.
     #  @return GridData_2D instance of projected surface layer
     #
-    def get_surface_layer(self):
-        grid, data = self.grid.get_surface_layer(self.data)
+    def get_surface_layer(self, **kwargs):
+        grid, data = self.grid.get_surface_layer(self.data, **kwargs)
         return GridData_2D(grid, data)
     
     #  -------------------------------------------------------
@@ -159,8 +245,8 @@ class GridData_3D(GridData):
     #  @param  self The object pointer.
     #  @return GridData_2D instance of projected bottom layer
     #
-    def get_bottom_layer(self):
-        grid, data = self.grid.get_bottom_layer(self.data)
+    def get_bottom_layer(self, **kwargs):
+        grid, data = self.grid.get_bottom_layer(self.data, **kwargs)
         return GridData_2D(grid, data)
     
     #  -------------------------------------------------------
@@ -172,15 +258,49 @@ class GridData_3D(GridData):
         grid, data = self.grid.get_vertical_average(self.data)
         return GridData_2D(grid, data)
 
+
+# ==============================================================================
+## Sub class of GridData for 2-dimensional situations (currently void)
+class GridVector_2D(GridVector):
+    #  ============== whole array operations ==============
+    ## horizontal curl of vector field - delegated to grid
+    def curl(self):
+        curl = self.grid.curl(self.data) 
+        return GridData_2D(self.grid, curl) # only z component of the curl
+    
     
 
+# ==============================================================================
+## Sub class of GridData for 3-dimensional situations
+class GridVector_3D(GridVector):
+    #  ============== Generic projectors ==============
+    #  Project 3D data onto GridData_2D instances
+    #  what surface means is defined by the resolution and type of the grid attribute
+    #  to vector/array interpoaltion
+    #  @param  self The object pointer.
+    #
+    #  -------------------------------------------------------
+    ## Project surface layer of data at native grid resolution
+    #  @param  self The object pointer.
+    #  @return GridData_2D instance of projected surface layer
+    #
+    def get_surface_layer(self, **kwargs):
+        data = []
+        for component in self.data:
+            grid, surfdata = self.grid.get_surface_layer(component, **kwargs)
+            data.append(surfdata)
+        return GridVector_2D(grid, data)
 
+    ## full curl of vector field - delegated to grid
+    def curl(self):
+        curl = self.grid.curl(self.data)   # 3D grid -> 3D vector
+        return GridVector_3D(self.grid, curl)
+    
 #  ====================================================================================
 ## Super class for offline interpolation in space+time by first interpolating space, then time - Generic for 2D/3D
 #
 #  sub classes must provide constructor and update_cache, which sets interpolation points (gdata0, gdata1) and weights (w0,w1)
 #  corresponding to time when_last
-        
 class GridData_withTime:
     ## --------------------------------------------------------------------
     ## Space+time interpolation front end

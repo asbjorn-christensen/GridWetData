@@ -64,7 +64,9 @@ class AboveSeaSurface(TopographicalViolation): pass
 # ===============================================================================
 ## Horizontal grid regulary spaced in lon-lat super class
 #
-# Not aware of wet/dry conditions
+# Wet/dry awareness: the horizontal grid may OPTIONALLY have an array wetmask[ix,iy], which tells
+# whether the area (x,y) with grid coordinates [ix+/-0.5, iy +/-0.5] is wet; in 3D cases, LonLatZGrid
+# manages the wet/dry awareness
 # grid coordinates are vertex coordinates with vertices at integers >= 0
 # (x,y) = (0,0) corresponds to (lon0, lat0)
 # Coordinate transformations:
@@ -265,7 +267,46 @@ class LonLatGrid:
         dx = EarthMeanRadius*cos(y*deg2rad)*self.dlon*deg2rad        # vector(ny)
         dy = EarthMeanRadius*self.dlat*deg2rad*ones(self.nx, float)  # vector(nx)
         return outer(dy,dx) # NB notice flip
+
+    ## generate the centered spatial gradients of a data field (d/dx, d/dy)
+    # @param  self The object pointer
+    # @data   array with shape (nx,ny)
+    # @padval (optional) value to apply, where 
+    # @return (d/dx data(nx,ny), d/dy data(nx,ny)) in units 1/m    
+    def gradient(self, data, padval=0.0):
+        assert (data.shape == self.nx, self.ny)
+        # --- generate raw gradients ---
+        ddx = zeros(data.shape, float) # padval -> rim
+        ddx[1:-1, :] = data[2:, :] - data[:-2, :]
+        ddy = zeros(data.shape, float) # padval -> rim
+        ddy[:, 1:-1] = data[:, 2:] - data[:, :-2]
+        y  = self.lat0 + arange(self.ny)*self.dlat             # vector(ny)
+        dx = 2*EarthMeanRadius*cos(y*deg2rad)*self.dlon*deg2rad  # vector(ny), factor 2 from center dist
+        dy = 2*EarthMeanRadius*self.dlat*deg2rad                 # 2: center dist
+        ddx /=  outer(ones(self.nx,float), dx)
+        ddy /=  dy
+        # apply wetmask, if set
+        if hasattr(self,"wetmask"):  # wetmask == 1/0 if cell is wet/dry
+            ddxOK = zeros(data.shape, float)
+            ddxOK[1:-1, :] = (self.wetmask[2:, :] + self.wetmask[:-2, :])/2
+            ddyOK = zeros(data.shape, float)
+            ddyOK[:, 1:-1] = (self.wetmask[:, 2:] + self.wetmask[:, :-2])/2
+            ddx            = where(ddxOK < 1, padval, ddx)  # only valid if both points are wet
+            ddy            = where(ddyOK < 1, padval, ddy)  # only valid if both points are wet
+        return ddx, ddy
     
+    ## generate the curl of a vector field data = (u,v) i.e. the field dv/dx-du/dy
+    # @param  self The object pointer
+    # @data   (u,v) arrays each with shape (nx,ny)
+    # @padval (optional) value to apply, where 
+    # @return curl(u,v) in units units_of_data/m    
+    def curl(self, data, padval=0.0):
+        assert len(data) == 2   # otherwise curl is unclear
+        u,v          = data 
+        du_dx, du_dy = self.gradient(u, padval)
+        dv_dx, dv_dy = self.gradient(v, padval)
+        return dv_dx - du_dy
+
         
     # ==================================================== writers ===================================================
     #
@@ -416,7 +457,7 @@ class LonLatGrid:
 # <b> Topographic conventions: </b>
 #     Grid coordinates are integer values >= 0 at vertices. Vertical cell separations are strictly vertical, so
 #     same horizontal grid applies to each horizontal layer.
-#     wetmask[ix,iy,iz] tells whether the volume (x,y,z) with grid coordinates [ix+/-0.5, iy +/-0.5, iz +/-0.5] is wet
+#     wetmask[ix,iy,iz] tells whether the volume (x,y,z) with grid coordinates [ix+/-0.5, iy +/-0.5, iz +/-0.5] is wet 
 #     actual water depth at xy is obtained by unconditional trilinear interpolation of layer_sep[:,:, bottom_layer[ix,iy]]
 #     where (ix,iy) are the indices of the cell where to xy belongs
 #     
@@ -699,9 +740,11 @@ class LonLatZGrid(LonLatGrid):
     #  @param  arr3D is the 3D array to be projected
     #  @param  padval is used for dry points
     #  @return LonLatGrid, array(nx,ny)
-    def get_surface_layer(self, arr3D, padval = 0.0):
+    def get_surface_layer(self, arr3D, padval = 0.0, setwetmask=False):
         data2D = where(self.wetmask[:,:,0]>0, arr3D[:,:,0], padval)
         grid2D = self.export_horizontal_grid()
+        if setwetmask:
+            grid2D.wetmask = self.wetmask[:,:,0]
         return grid2D, data2D
     
     #  -------------------------------------------------------
@@ -712,13 +755,15 @@ class LonLatZGrid(LonLatGrid):
     #  @param  padval is used for dry points
     #  @return LonLatGrid, array(nx,ny)
     #
-    def get_bottom_layer(self, arr3D, padval = 0.0):
+    def get_bottom_layer(self, arr3D, padval = 0.0, setwetmask=False):
         data2D = padval*ones((self.nx, self.ny), float)
         # transfer data at wet points
         for ix in range(self.nx):
             for iy in range(self.ny):
                 if self.wetmask[ix,iy,0]>0: data2D[ix,iy] = arr3D[ix, iy, self.bottom_layer[ix,iy]]
         grid2D = self.export_horizontal_grid()
+        if setwetmask:
+            grid2D.wetmask = where(self.bottom_layer >= 0, 1, 0)
         return grid2D, data2D
     
     #  -------------------------------------------------------

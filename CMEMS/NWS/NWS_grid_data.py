@@ -44,7 +44,7 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
                 else: 
                     msg  = "Unable to auto-locate data variable in data set %s" % fname
                     raise exceptions.ValueError(msg)
-        else: # an explicit varname has bben provided
+        else: # an explicit varname has been provided
             self.prop = varname  
             assert self.ncfdata.has_variable(varname) # check solicited data is present
             
@@ -65,7 +65,7 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
     #  @return string representation of instance
     #
     def __str__(self):
-        iam = "GridData_3DwithTime instance for prop=%s for gtag=%s\n" % (self.prop, self.gtag)
+        iam = "GridData_3DwithTime instance for prop=%s\n" % self.prop
         if self.when_last is None:
             iam = iam + "cache empty"
         else:
@@ -135,7 +135,96 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
             self.gdata1 = self.load_frame(i1) 
         self.when_last = when
 
+
+#  ====================================================================================
+## Super class for interpolation of vector data in space+time by first interpolating space, then time
+#  specific for 3D + interaction with DataManager 
+# <b> Roles </b> 
+#    \li keep track of data cache, decide whether to reload
+#    \li interact with data manager
+#    \li call hook is redirectd to interpolate, so instances are callable as obj(where, when)
+#
+# compositional relation to GridVector_3D
+# Attributes set by sub classes:
+#       prop: data property types vector (set by sub classes)
+#    
+# Inherit update_cache from super class
+#
+class NWS_GridVector_3DwithTime(NWS_GridData_3DwithTime):
+    #  -----------------------------------------------------
+    ## constructor
+    #  Data is first loaded at interpolation time, when time argument is available
+    #  spectator class to view a netcdf data set with time dimension
+    #  @param self       The object pointer
+    #  @param fname      netcdf data set file name  
+    #  @param varnames   variable names to look for (vector of strings) (optional)
+    #                    If absent, class attributre prop must be set
+    #                    No scanning for known variable names
+    #                    for each token "zero_data", a zero-valued field is inserted in that position
+    #                    (allow to e.g. uprank a horizontal field to 3D)
+    def __init__(self, fname, varnames=None):
+        self.fname   = fname
+        self.ncfdata = NWS_dataformat.NWSDataSet(fname)
+        self.grid    = NWSGrid_3D(fname)
+        # resolve property attribute prop
+        if varnames is None:
+            if not hasattr(self, "prop"):
+                msg  = "Unable to identify which variables should be loaded from data set %s" % fname
+                raise exceptions.ValueError(msg)
+        else: # an explicit varname has been provided
+            self.prop = varnames
+        for vnam in self.prop: # check solicited data is present
+            assert self.ncfdata.has_variable(vnam) 
+            
+        ## datetime instance corresponding to current cache content (None for empty cache)
+        self.when_last = None # empty interpolation cache
         
+        
+    ## --------------------------------------------------------------------
+    ## Generate a informative string representation of object
+    #  @param self The object pointer
+    #  @return string representation of instance
+    #
+    def __str__(self):
+        iam = "GridVector_3DwithTime instance for propa=%s\n" % "".join(self.prop)
+        if self.when_last is None:
+            iam = iam + "cache empty"
+        else:
+            iam = iam + "cache loaded for t=%s\n" % str(self.when_last)
+            iam = iam + "left  bracket : w=%f file=%s\n" % (self.w0, self.gdata0.file_name)
+            iam = iam + "right bracket : w=%f file=%s"   % (self.w1, self.gdata1.file_name)
+        return iam
+
+    ## Trigger load of a specific time frame as GridData_3D instance and tag instance with frame number
+    #  @param self       The object pointer
+    #  @param ifr        time frame to load
+    #  @return           GridData_3D instance with loaded data, with attributes time_frame == ifr and
+    #                    time corresponding to datetime of time frame ifr
+    #
+    def load_frame(self, ifr):
+        if _verbose: print "load_frame: loading frame %d" % ifr
+        # --- compose data in vector according to prop as a plain list
+        data = []
+        for prop in self.prop:
+            if prop is "zero_data": # allow to e.g. uprank a horizontal field to 3D
+                data.append(zeros(self.grid.nx, self.grid.ny, self.grid.nz), float)  # grid is NWSGrid_3D
+            else:
+                data.append(self.ncfdata.get_time_frame(prop, ifr))
+        g3D  = GridVector_3D(self.grid, data) # do not copy grid, which is static
+        g3D.time_frame = ifr
+        g3D.time       = self.ncfdata.get_time(ifr)
+        return g3D
+
+    ## Inquire number of time frames in current data set for this variable
+    #  @param self       The object pointer
+    #
+    #  since all variables have same time dimension, just probe first variable 
+    def get_number_of_frames(self): 
+        return self.ncfdata.get_number_of_frames(self.prop[0]) # probe first variable 
+        
+    
+
+              
 
 ##########################################################################################
 #    Specific elementary property classes
@@ -181,12 +270,15 @@ class NWS_Phytoplankton_3DwithTime(NWS_GridData_3DwithTime):
 class NWS_PrimaryProductivity_3DwithTime(NWS_GridData_3DwithTime):
     ## data property type 
     prop = "netPP"   # set class attribute, passed to when soliciting data                        
-                                       
 
+class NWS_HorizontalCurrents_3DwithTime(NWS_GridVector_3DwithTime):
+    ## data property type 
+    prop = ("vozocrtx", "vomecrty")   # set class attribute, passed to when soliciting data               
 
-# TODO currents ()                        
-#      "east_current"            : "vozocrtx",
-#      "north_Current"           : "vomecrty",
+class NWS_Currents_vertical0_3DwithTime(NWS_GridVector_3DwithTime):
+    ## vertical component currently set to zero
+    prop = ("vozocrtx", "vomecrty", "zero_data")   # set class attribute, passed to when soliciting data
+    
 
                         
 #################### self test #########################
