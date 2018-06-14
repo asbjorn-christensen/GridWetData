@@ -303,7 +303,7 @@ class GridVector_3D(GridVector):
 #  corresponding to time when_last
 class GridData_withTime:
     ## --------------------------------------------------------------------
-    ## Space+time interpolation front end
+    ## Space+time interpolation front end for scalar+vector data
     #  This methods parses time argument and performs time interpolation part after
     #  space interpolation which is delegated to grid_data methods
     #  Cache last time frames loade, to enable interpolation speedup

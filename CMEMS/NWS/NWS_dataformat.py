@@ -183,7 +183,8 @@ class NWSDataSet:
         #  @param self            open netCDF file
         #  @param diagvarname    name of variable from which to detect topography (optional)
         #  @return               cellw0(nx,ny,nz)  (array of cell widths, -1 for dry cells)
-        #   
+        #
+        #  assume cellw0 is time independent (pick time frame 0)
         #  Assess topography by probing for mask==True at data variable diagvarname in ncf.
         #  If optional parameter diagvarname is not present, it defaults to an entry
         #  in a pre-coded catalogue of variable names to look for (NWS_variablenames).
@@ -216,11 +217,21 @@ class NWSDataSet:
 
     def get_time_frame(self, vname, itime=0):
         ## Extract frame itime of variable vname and swap axes, corresponding to GWD data layout
-        var   = self.ncf.variables[vname][itime,:]
-        var   = swapaxes(var, 0, 2) # cast to GWD layout
+        #  3D: (time, depth, lat, lon) ->  (lon, lat, depth)
+        #  2D: (time, lat, lon)        ->  (lon, lat)
+        ncvar   = self.ncf.variables[vname]
+        maskvar = ncvar[itime,:]
+        var     = maskvar.data          # strip mask
+        if ncvar.dimensions == ('time', 'depth', 'lat', 'lon'): # 3D case
+            var   = swapaxes(var, 0, 2)                         # cast to 3D GWD layout
+        elif ncvar.dimensions == ('time', 'lat', 'lon'):        # 2D case
+            var   = swapaxes(var, 0, 1)                         # cast to 2D GWD layout
+        else:
+            msg = "get_time_frame: unexpected axes / axes ordering : %s" % str(ncvar.dimensions)
+            raise exception.ValueError(msg)
         if _verbose:
             print "get_time_frame: exporting frame %d" % itime
-        return var.data             # strip mask
+        return var            
         
     def get_time(self, itime=0):
         ## return datetime corresponding to frame itime 
@@ -228,7 +239,22 @@ class NWSDataSet:
     
     def get_number_of_frames(self, vname):
         return len(self.ncf.variables[vname])
-        
+
+    def get_wetmask(self, vname):
+        ## extract wetmask from variable vname
+        #  assume wetmask is time independent (pick time frame 0)
+        #  3D: (time, depth, lat, lon) ->  (lon, lat, depth)
+        #  2D: (time, lat, lon)        ->  (lon, lat)
+        ncvar   = self.ncf.variables[vname]
+        wetmask = where(ncvar[0,:].mask, 0, 1)   # pick time frame 0
+        if ncvar.dimensions == ('time', 'depth', 'lat', 'lon'): # 3D case
+            wetmask   = swapaxes(wetmask, 0, 2)                         # cast to 3D GWD layout
+        elif ncvar.dimensions == ('time', 'lat', 'lon'):        # 2D case
+            wetmask   = swapaxes(wetmask, 0, 1)                         # cast to 2D GWD layout
+        else:
+            msg = "get_wetmask: unexpected axes / axes ordering : %s" % str(ncvar.dimensions)
+            raise exception.ValueError(msg)
+        return wetmask
         
 #################### self test #########################
 #

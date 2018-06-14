@@ -5,96 +5,27 @@ from GridWetData.grid_data import *
 
 _verbose          = False  # control debugging output
 
+
 #  ====================================================================================
-## Super class for interpolation in space+time by first interpolating space, then time
-#  specific for 3D + interaction with DataManager
+## Provider Super class for interpolation in space+time by first interpolating space, then time
+#  common for 2D/3D and scalar/vector data
 # <b> Roles </b> 
 #    \li keep track of data cache, decide whether to reload
 #    \li interact with data manager
 #    \li call hook is redirectd to interpolate, so instances are callable as obj(where, when)
-#
-# compositional relation to GridData_3D
-# Attributes set by sub classes:
-#       prop: data property type (set by sub classes)
-#    
-#    
-class NWS_GridData_3DwithTime(GridData_3DwithTime):
+#  
+  
+class NWS_GridData_withTime(GridData_withTime):
     #  -----------------------------------------------------
-    ## constructor
-    #  Data is first loaded at interpolation time, when time argument is available
-    #  spectator class to view a netcdf data set with time dimension
-    #  @param self      The object pointer
-    #  @param fname     netcdf data set file name  
-    #  @param varname   variable name to look for (optional)
-    #                   If absent (and class attributre prop is not set) the data set
-    #                   is scanned for known variable names
-    def __init__(self, fname, varname=None):
-        self.fname  = fname
-        self.ncfdata = NWS_dataformat.NWSDataSet(fname)
-        self.grid   = NWSGrid_3D(fname)
-        # resolve property attribute prop
-        if varname is None:
-            if hasattr(self, "prop"):
-                assert self.ncfdata.has_variable(self.prop) # check solicited data is present
-            else: # look for known variable names - pick first match
-                for prop in NWS_dataformat.NWS_variablenames_3D.values():
-                    if self.ncfdata.has_variable(prop):
-                        self.prop = prop
-                        break
-                else: 
-                    msg  = "Unable to auto-locate data variable in data set %s" % fname
-                    raise exceptions.ValueError(msg)
-        else: # an explicit varname has been provided
-            self.prop = varname  
-            assert self.ncfdata.has_variable(varname) # check solicited data is present
-            
-        ## datetime instance corresponding to current cache content (None for empty cache)
-        self.when_last = None # empty interpolation cache
-        
     def __del__(self):
         try:
             self.ncfdata.close()
         except:
             pass
+        
     def close(self):
         self.ncfdata.close()
         
-    ## --------------------------------------------------------------------
-    ## Generate a informative string representation of object
-    #  @param self The object pointer
-    #  @return string representation of instance
-    #
-    def __str__(self):
-        iam = "GridData_3DwithTime instance for prop=%s\n" % self.prop
-        if self.when_last is None:
-            iam = iam + "cache empty"
-        else:
-            iam = iam + "cache loaded for t=%s\n" % str(self.when_last)
-            iam = iam + "left  bracket : w=%f file=%s\n" % (self.w0, self.gdata0.file_name)
-            iam = iam + "right bracket : w=%f file=%s"   % (self.w1, self.gdata1.file_name)
-        return iam
-
-    ## Trigger load of a specific time frame as GridData_3D instance and tag instance with frame number
-    #  @param self       The object pointer
-    #  @param ifr        time frame to load
-    #  @return           GridData_3D instance with loaded data, with attributes time_frame == ifr and
-    #                    time corresponding to datetime of time frame ifr
-    #
-    def load_frame(self, ifr):
-        if _verbose: print "load_frame: loading frame %d" % ifr
-        data = self.ncfdata.get_time_frame(self.prop, ifr)
-        g3D  = GridData_3D(self.grid, data) # do not copy grid, which is static
-        g3D.time_frame = ifr
-        g3D.time       = self.ncfdata.get_time(ifr)
-        return g3D
-
-    ## Inquire number of time frames in current data set for this variable
-    #  @param self       The object pointer
-    #
-    def get_number_of_frames(self): 
-        return self.ncfdata.get_number_of_frames(self.prop)
-        
-    # --------------------------------------------------------------
     ## Load data corresponding to datetime instance argument when, if necessary, to cache
     #  In many practical cases, data need not to be reloaded, weights should just be changed or pointers switched
     #  Cache identity is decided time frame numbers 
@@ -137,6 +68,89 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
 
 
 #  ====================================================================================
+## Super class for interpolation in space+time by first interpolating space, then time
+#  specific for 3D + interaction with DataManager
+# <b> Roles </b> 
+#    \li keep track of data cache, decide whether to reload
+#    \li interact with data manager
+#    \li call hook is redirectd to interpolate, so instances are callable as obj(where, when)
+#
+# compositional relation to GridData_3D
+# Attributes set by sub classes:
+#       prop: data property type (set by sub classes)
+#    
+#    
+class NWS_GridData_3DwithTime(NWS_GridData_withTime, GridData_3DwithTime):
+    #  -----------------------------------------------------
+    ## constructor
+    #  Data is first loaded at interpolation time, when time argument is available
+    #  spectator class to view a netcdf data set with time dimension
+    #  @param self      The object pointer
+    #  @param fname     netcdf data set file name  
+    #  @param varname   variable name to look for (optional)
+    #                   If absent (and class attributre prop is not set) the data set
+    #                   is scanned for known variable names
+    def __init__(self, fname, varname=None):
+        self.fname  = fname
+        self.ncfdata = NWS_dataformat.NWSDataSet(fname)
+        self.grid   = NWSGrid_3D(fname)
+        # resolve property attribute prop
+        if varname is None:
+            if hasattr(self, "prop"):
+                assert self.ncfdata.has_variable(self.prop) # check solicited data is present
+            else: # look for known variable names - pick first match
+                for prop in NWS_dataformat.NWS_variablenames_3D.values():
+                    if self.ncfdata.has_variable(prop):
+                        self.prop = prop
+                        break
+                else: 
+                    msg  = "Unable to auto-locate data variable in data set %s" % fname
+                    raise exceptions.ValueError(msg)
+        else: # an explicit varname has been provided
+            self.prop = varname  
+            assert self.ncfdata.has_variable(varname) # check solicited data is present
+            
+        ## datetime instance corresponding to current cache content (None for empty cache)
+        self.when_last = None # empty interpolation cache
+        
+    ## --------------------------------------------------------------------
+    ## Generate a informative string representation of object
+    #  @param self The object pointer
+    #  @return string representation of instance
+    #
+    def __str__(self):
+        iam = "NWS_GridData_3DwithTime instance for prop=%s\n" % self.prop
+        if self.when_last is None:
+            iam = iam + "cache empty"
+        else:
+            iam = iam + "cache loaded for t=%s\n" % str(self.when_last)
+            iam = iam + "left  bracket : w=%f file=%s\n" % (self.w0, self.gdata0.file_name)
+            iam = iam + "right bracket : w=%f file=%s"   % (self.w1, self.gdata1.file_name)
+        return iam
+
+    ## Trigger load of a specific time frame as GridData_3D instance and tag instance with frame number
+    #  @param self       The object pointer
+    #  @param ifr        time frame to load
+    #  @return           GridData_3D instance with loaded data, with attributes time_frame == ifr and
+    #                    time corresponding to datetime of time frame ifr
+    #
+    def load_frame(self, ifr):
+        if _verbose: print "load_frame: loading frame %d" % ifr
+        data = self.ncfdata.get_time_frame(self.prop, ifr)
+        g3D  = GridData_3D(self.grid, data) # do not copy grid, which is static
+        g3D.time_frame = ifr
+        g3D.time       = self.ncfdata.get_time(ifr)
+        return g3D
+
+    ## Inquire number of time frames in current data set for this variable
+    #  @param self       The object pointer
+    #
+    def get_number_of_frames(self): 
+        return self.ncfdata.get_number_of_frames(self.prop)
+        
+    
+
+#  ====================================================================================
 ## Super class for interpolation of vector data in space+time by first interpolating space, then time
 #  specific for 3D + interaction with DataManager 
 # <b> Roles </b> 
@@ -150,7 +164,7 @@ class NWS_GridData_3DwithTime(GridData_3DwithTime):
 #    
 # Inherit update_cache from super class
 #
-class NWS_GridVector_3DwithTime(NWS_GridData_3DwithTime):
+class NWS_GridVector_3DwithTime(NWS_GridData_withTime):
     #  -----------------------------------------------------
     ## constructor
     #  Data is first loaded at interpolation time, when time argument is available
@@ -186,7 +200,7 @@ class NWS_GridVector_3DwithTime(NWS_GridData_3DwithTime):
     #  @return string representation of instance
     #
     def __str__(self):
-        iam = "GridVector_3DwithTime instance for propa=%s\n" % "".join(self.prop)
+        iam = "NWS_GridVector_3DwithTime instance for propa=%s\n" % "".join(self.prop)
         if self.when_last is None:
             iam = iam + "cache empty"
         else:
@@ -222,9 +236,83 @@ class NWS_GridVector_3DwithTime(NWS_GridData_3DwithTime):
     def get_number_of_frames(self): 
         return self.ncfdata.get_number_of_frames(self.prop[0]) # probe first variable 
         
-    
+# class NWS_GridVector_2DwithTime(NWS_GridData_withTime):  deferred until needed
 
-              
+#  ====================================================================================
+## Super class for interpolation of 2D data in space+time by first interpolating space, then time
+#  
+
+class NWS_GridData_2DwithTime(NWS_GridData_withTime):
+    #  -----------------------------------------------------
+    ## constructor
+    #  Data is first loaded at interpolation time, when time argument is available
+    #  spectator class to view a netcdf data set with time dimension
+    #  @param self      The object pointer
+    #  @param fname     netcdf data set file name  
+    #  @param varname   variable name to look for (optional)
+    #                   If absent (and class attributre prop is not set) the data set
+    #                   is scanned for known variable names
+    def __init__(self, fname, varname=None, get_wetmask=False):
+        self.fname  = fname
+        self.ncfdata = NWS_dataformat.NWSDataSet(fname)
+        self.grid   = NWSGrid_2D(fname)
+        # resolve property attribute prop
+        if varname is None:
+            if hasattr(self, "prop"):
+                assert self.ncfdata.has_variable(self.prop) # check solicited data is present
+            else: # look for known variable names - pick first match
+                for prop in NWS_dataformat.NWS_variablenames_2D.values():
+                    if self.ncfdata.has_variable(prop):
+                        self.prop = prop
+                        break
+                else: 
+                    msg  = "Unable to auto-locate data variable in data set %s" % fname
+                    raise exceptions.ValueError(msg)
+        else: # an explicit varname has been provided
+            self.prop = varname  
+            assert self.ncfdata.has_variable(varname) # check solicited data is present
+
+        if get_wetmask:
+            self.grid.wetmask = self.ncfdata.get_wetmask(self.prop)
+            
+        ## datetime instance corresponding to current cache content (None for empty cache)
+        self.when_last = None # empty interpolation cache
+        
+    ## --------------------------------------------------------------------
+    ## Generate a informative string representation of object
+    #  @param self The object pointer
+    #  @return string representation of instance
+    #
+    def __str__(self):
+        iam = "NWS_GridData_2DwithTime instance for prop=%s\n" % self.prop
+        if self.when_last is None:
+            iam = iam + "cache empty"
+        else:
+            iam = iam + "cache loaded for t=%s\n" % str(self.when_last)
+            iam = iam + "left  bracket : w=%f file=%s\n" % (self.w0, self.gdata0.file_name)
+            iam = iam + "right bracket : w=%f file=%s"   % (self.w1, self.gdata1.file_name)
+        return iam
+
+    ## Trigger load of a specific time frame as GridData_2D instance and tag instance with frame number
+    #  @param self       The object pointer
+    #  @param ifr        time frame to load
+    #  @return           GridData_2D instance with loaded data, with attributes time_frame == ifr and
+    #                    time corresponding to datetime of time frame ifr
+    #
+    def load_frame(self, ifr):
+        if _verbose: print "load_frame: loading frame %d" % ifr
+        data = self.ncfdata.get_time_frame(self.prop, ifr)
+        g2D  = GridData_2D(self.grid, data) # do not copy grid, which is static
+        g2D.time_frame = ifr
+        g2D.time       = self.ncfdata.get_time(ifr)
+        return g2D
+
+    ## Inquire number of time frames in current data set for this variable
+    #  @param self       The object pointer
+    #
+    def get_number_of_frames(self): 
+        return self.ncfdata.get_number_of_frames(self.prop)
+    
 
 ##########################################################################################
 #    Specific elementary property classes
@@ -233,8 +321,25 @@ class NWS_GridVector_3DwithTime(NWS_GridData_3DwithTime):
 # The stagger method will trigger that load_frame restagger data to
 # cell centered data after load. If class does not have this method, no
 # restaggering is performed
-   
-## GridData_3D sub class for temperature data in both space and time
+
+
+## GridData_2D sub classes 
+class NWS_SeaFloorTemperature_2DwithTime(NWS_GridData_2DwithTime):
+    ## data property type 
+    prop = "sotemper"   # set class attribute, passed to when soliciting data
+
+class NWS_MixedLayerThickness_2DwithTime(NWS_GridData_2DwithTime):
+    ## data property type 
+    prop = "karamld"   # set class attribute, passed to when soliciting data
+
+class NWS_SeaSurfaceHeight_2DwithTime(NWS_GridData_2DwithTime):
+    ## data property type 
+    prop = "sossheig"   # set class attribute, passed to when soliciting data
+
+
+    
+    
+## GridData_3D sub classes for temperature data in both space and time
 class NWS_Temperature_3DwithTime(NWS_GridData_3DwithTime):
     ## data property type 
     prop = "votemper"   # set class attribute, passed to when soliciting data
@@ -271,6 +376,9 @@ class NWS_PrimaryProductivity_3DwithTime(NWS_GridData_3DwithTime):
     ## data property type 
     prop = "netPP"   # set class attribute, passed to when soliciting data                        
 
+
+
+## GridVector_3D sub classes for temperature data in both space and time    
 class NWS_HorizontalCurrents_3DwithTime(NWS_GridVector_3DwithTime):
     ## data property type 
     prop = ("vozocrtx", "vomecrty")   # set class attribute, passed to when soliciting data               
