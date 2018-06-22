@@ -1,0 +1,48 @@
+
+----------------------------------------------------------------------------------------------
+De data der ligger der nu er stadig v3, fordi v4 har en ekstra bio-parameter:
+
+#1-#11 v4=v3
+#12 = labile dissolved nitrogene (v4), eller iltindhold (v3)
+#13 = iltindhold (v4)
+
+Vi er nok nødt til at hitte ud af hvordan dette håndteres, for v3 lever ikke evigt.
+
+Jeg har uploadet et v4-sæt som du/kollega kan snitte jeres program til,
+så det kan læses. Altså med 13 parametre. Sættet ligger i kataloget v4_products/ .
+
+Jeg har tilføjet en ekstra Fortran-fil i kataloget tools/ : bio2cdf_v4.f90 .
+Hvis du differ de to bio2cdf versioner, bør det bliver klart hvad der er sket.
+
+Hvis det viser sig ikke at være vejen frem, må jeg hitte ud af at fjerne denne parameter
+fra filen inden upload.
+
+Men jeg tror det er smart at forsøge at læse de nye data i løbet af den næste måneds tid,
+og melde tilbage om I kan håndtere det.
+----------------------------------------------------------------------------------------------
+
+
+------------------------------------------------------------
+ diff bio2cdf.f90  bio2cdf_v4.f90
+------------------------------------------------------------
+<         integer,parameter :: neco=12, nsed=2
+---
+>         integer,parameter :: neco=13, nsed=2
+44c44
+< 	real,dimension(im,jm,km) :: nh4,no3,po4,sil,dia,fla,b_g,zo1,zo2,pom,pos,oxy,se1,se2
+---
+> 	real,dimension(im,jm,km) :: nh4,no3,po4,sil,dia,fla,b_g,zo1,zo2,pom,pos,lbn,oxy,se1,se2
+102a103,104
+> 	CALL NC_CREATE_3D(trim(dir)//'lbn.nc','lbn',8,'mmol.m-3',	&
+> 	                  im,jm,km,XLON,YLAT,ZDEP,0.1234E38)
+119a122
+> 	lbn=0.1234e38
+157c160,161
+<               oxy(i,j,k)=eco(12,id3d(jm+1-j,i,k))/scale
+---
+>               lbn(i,j,k)=eco(12,id3d(jm+1-j,i,k))/scale
+>               oxy(i,j,k)=eco(13,id3d(jm+1-j,i,k))/scale
+176a181
+> 	  call NC_WRITE_3D(trim(dir)//'lbn.nc','lbn',im,jm,km,NN,xtmp,lbn)
+
+

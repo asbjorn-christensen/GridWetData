@@ -1,6 +1,6 @@
         program burst_HBM_ergom_output
 !========================================================================================================================
-!       Burst HBM/ERGOM v5 output into constituents
+!       Burst HBM/ERGOM v4 output into constituents
 !
 !       Usage: burstHBM [p|b] <physfile|biofile> [prop*]
 !
@@ -33,10 +33,11 @@
 !              zo2  : extract meso  zooplankton (3D)
 !              spm1 : extract suspended particulate matters in content of nitrogen (3D)
 !              spm2 : extract suspended particulate matters in content of silicate (3D)
+!              lbn  : extract labile dissolved nitrogen (3D)          
 !              oxy  : extract oxygen tension (3D)
-!              chl  : compose chlorophyll (3D)          
+!              chl  : compose chlorophyll (3D)
 !              sed1 : extract sedimant variable 1 (2D)
-!              sed2 : extract sedimant variable 1 (2D)
+!              sed2 : extract sedimant variable 1 (2D)      
 !          
 !       The current version does not consistently return non-zero for anormal execusions (but info printet to stdout is updated)  
 !       ----------------------------------------------------------------------------------------------------------
@@ -49,10 +50,10 @@
 !         2     ws  Wadden Sea 
 !         3     bs  Baltic Sea 
 !
-!       The operational ERGOM v5 is dfferent from OPEC version. There are 12 three-dimensional state variables and 
-!       2 sediment variables in the operational ERGOM v5.
+!       The operational ERGOM v5 is dfferent from OPEC version. There are 13 three-dimensional state variables and 
+!       2 sediment variables in the operational ERGOM v4.
 !       
-!       Now,  12 three-dimensional state variables refer to as
+!       Now,  13 three-dimensional state variables refer to as
 !                   nh4(i,j,k)=eco(1,id3d(jm+1-j,i,k))/scale               
 !                   no3(i,j,k)=eco(2,id3d(jm+1-j,i,k))/scale
 !                   po4(i,j,k)=eco(3,id3d(jm+1-j,i,k))/scale               
@@ -64,29 +65,32 @@
 !                   zo2(i,j,k)=eco(9,id3d(jm+1-j,i,k))/scale
 !                   SPM1(i,j,k)=eco(10,id3d(jm+1-j,i,k))/scale ! suspended particulate matters in content of nitrogen
 !                   SPM2(i,j,k)=eco(11,id3d(jm+1-j,i,k))/scale ! suspended particulate matters in content of silicate
-!                   oxy(i,j,k)=eco(12,id3d(jm+1-j,i,k))/scale
+!                   lbn(i,j,k)=eco(12,id3d(jm+1-j,i,k))/scale
+!                   oxy(i,j,k)=eco(13,id3d(jm+1-j,i,k))/scale
 !       
 !       2 sediment variables refer to as
 !                   SPM_sed1(i,j)=sed(1,id3d(jm+1-j,i,1))/scale               
 !                             SPM_sed2(i,j)=sed(2,id3d(jm+1-j,i,1))/scale
 !
-!       May 18, 2017: DMI dump format has changed, so unformatted files need to be opened with access='stream'
-!                     and indexing in eco/benthic variables was switched
-!                     Read old format by defining preprocessor flag OLDFORMAT (default: new format)
+!       20 June 2018:  transition from format v3 to v4
+!                      reflect change in bio statevariables where #12 becomes labile dissolved nitrogen
+!                      and #13 becomes dissolved oxygen (#12 in v3)
+!                      ....................          
+!                      #1-#11 v4=v3
+!                      #12 = labile dissolved nitrogene (v4), eller iltindhold (v3)
+!                      #13 = iltindhold (v4)
 !         
 !========================================================================================================================  
 !       Linux build : 
-!            ifort -o burstHBM -convert big_endian -I/usr/local/include -L/usr/local/lib -lnetcdff -lnetcdf  burst_HBM_ergom_output.F90
-!          
-!            gfortran -o burstHBM     -fconvert=big-endian             burst_HBM_ergom_output.F90 -I/usr/include -L/usr/lib -lnetcdff -lnetcdf -lnetcdf -lnetcdff
-!            gfortran -o burstHBM_old -fconvert=big-endian -DOLDFORMAT burst_HBM_ergom_output.F90 -I/usr/include -L/usr/lib -lnetcdff -lnetcdf -lnetcdf -lnetcdff
-!          
+!            ifort -o burstHBM -convert big_endian -I/usr/local_intel/include -L/usr/local_intel/lib -lnetcdff -lnetcdf  burst_HBM_ergom_output_v4.F90
+!
+!            export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
+!            gfortran -o burstHBM -fconvert=big-endian  -I/usr/include   burst_HBM_ergom_output_v4.F90 -L/usr/lib/x86_64-linux-gnu -lnetcdff -lnetcdf
+!            
 !       cross-compile to static windows executable: e.g.
-!            NETCDF=/home/asbjorn/DTU/Ballastvand_SRA/IBMlib_port_to_windows/mingw_netcdf/working/NETCDF
-!            /usr/bin/x86_64-w64-mingw32-gfortran -c -DOLDFORMAT -fconvert=big-endian -I${NETCDF}/include burst_HBM_ergom_output.F90
-!            /usr/bin/x86_64-w64-mingw32-gfortran -static -o burstHBM_old.exe burst_HBM_ergom_output.o -L${NETCDF}/lib  -lnetcdf -lnetcdff -lnetcdf -lnetcdff
-!            /usr/bin/x86_64-w64-mingw32-gfortran -c -fconvert=big-endian -I${NETCDF}/include burst_HBM_ergom_output.F90
-!            /usr/bin/x86_64-w64-mingw32-gfortran -static -o burstHBM.exe     burst_HBM_ergom_output.o -L${NETCDF}/lib  -lnetcdf -lnetcdff -lnetcdf -lnetcdff          
+!            NETCDF=/home/asbjorn/DTU/Ballastvand_SRA/IBMlib_port_to_windows_64bit/mingw_netcdf/NETCDF
+!            /usr/bin/x86_64-w64-mingw32-gfortran -c -fconvert=big-endian -I${NETCDF}/include burst_HBM_ergom_output_v4.F90
+!            /usr/bin/x86_64-w64-mingw32-gfortran -static -o burstHBM.exe     burst_HBM_ergom_output_v4.o -L${NETCDF}/lib  -lnetcdf -lnetcdff -lnetcdf -lnetcdff          
 !========================================================================================================================
         use netcdf   
         implicit None
@@ -105,7 +109,7 @@
         integer(4),dimension(0:n2d3nm2),target :: wu2,wv2,zz2
         integer(4),dimension(0:n2d3nm3),target :: wu3,wv3,zz3
 !       ---- ecovars ----
-        integer,parameter :: neco=12, nsed=2  !
+        integer,parameter :: neco=13, nsed=2  !
 #ifdef OLDFORMAT
 !       --- old data layout
         integer(4),dimension(neco,0:n3d3nm0),target :: eco3nm0
@@ -308,7 +312,7 @@
 
 !             ------ biology ------
                  
-              case ("nh4 ", "no3 ", "po4 ", "sio4", "dia ", "fla ", "cya ", "zo1 ", "zo2 ", "spm1", "spm2", "oxy ")   ! direct eco variables
+              case ("nh4 ", "no3 ", "po4 ", "sio4", "dia ", "fla ", "cya ", "zo1 ", "zo2 ", "spm1", "spm2", "lbn ", "oxy ")   ! direct eco variables
                  if (readphys) goto 890
                  call get_eco_index(prop, ieco)
                  call get_eco_data(buf_3d, ieco)
@@ -551,8 +555,10 @@
            ie = 10  ! suspended particulate matters in content of nitrogen
         case("spm2")
            ie = 11  ! suspended particulate matters in content of silicate
+        case("lbn ")
+           ie = 12              
         case("oxy ")
-           ie = 12            
+           ie = 13            
 !       ---- sediment vars
         case("sed1")
            ie = 1
