@@ -23,5 +23,9 @@
 # ---------------------------------------------------------------------------------------------------------------
 # <br>
 #
+from CMEMS_grid_data import *   # triggers import of data_manager, grids and support libraries
 import NWS
-
+import BAL
+import CMEMS_grids              # offer encapsulated environment for import GridWetData.CMEMS.NWS.NWS_grids
+import CMEMS_grid_data          # offer encapsulated environment for import GridWetData.CMEMS.NWS.NWS_grid_data
+import CMEMS_dataformat    

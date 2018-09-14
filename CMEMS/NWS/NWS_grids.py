@@ -1,9 +1,24 @@
 #!/usr/bin/env python
 
-import sys; sys.path[1:1] = ["../../.."]; print "fix sys.path hack"
-from GridWetData.grids import *
+from GridWetData.CMEMS.CMEMS_grids import *
 
-import NWS_dataformat
+
+NWS_variablenames_3D = {"temperature"             : "votemper",
+                        "salinity"                : "vosaline",
+                        "east_current"            : "vozocrtx",
+                        "north_Current"           : "vomecrty",
+                        "volume_beam_attenuation" : "attn",
+                        "chlorophyll"             : "CHL",
+                        "dissolved_oxygen"        : "O2o",
+                        "nitrate"                 : "N3n",
+                        "phosphate"               : "N1p",
+                        "phytoplankton"           : "PhytoC",
+                        "primary_productivity"    : "netPP"} 
+
+NWS_variablenames_2D = {"sea_floor_temperature" : "sotemper", 
+                        "mixed_layer_thickness" : "karamld", 
+                        "sea_surface_height"    : "sossheig"}
+
 
 # ==============================================================================
 #  Shared grid classes for these CMEMS model output:
@@ -20,63 +35,24 @@ import NWS_dataformat
 
 # ==============================================================================
 ## 2D surface/at-depth  NWS grid
-class NWSGrid_2D(LonLatGrid):
-    #  -----------------------------------------------------
-    ## constructor from file data
-    #  @param self    The object pointer
-    #  @param fname   file name of an NWS data netcdf file (contains grid info)
-    #
-    def __init__(self, fname):
-        ncfile     = NWS_dataformat.NWSDataSet(fname)
-        ## file name corresponding to loaded data set
-        self.fname = fname
-        nx, ny, lon0, lat0, dlon, dlat = ncfile._extract_2D_grid_params()
-        ncfile.close()
-        #
-        LonLatGrid.__init__(self,  nx, ny, lon0, lat0, dlon, dlat)
-        #
-        
+class NWS_Grid_2D(CMEMS_Grid_2D):
+    #  ----------------------------------------------------------------------------------------
+    resolve_topo_varnames_2D = NWS_variablenames_2D  # valid variables to resolve 2D topography
+    #  ----------------------------------------------------------------------------------------
+    
 
 #  =====================================================================
 ## 3D  NWS grid
-#  compositional relation to the 2D surface NWS grid
-#  NWS grid data are interpolated to specific depths at generation time,
-#  so vertical 
-class NWSGrid_3D(LonLatZGrid):
-    #  -----------------------------------------------------
-    ## constructor from file data
-    #  @param self    The object pointer
-    #  @param fname   file name of an NWS data netcdf file (contains grid info)
-    #  @param diagvar Name of diagnostic variable, to deduce topography from
-    #
-    def __init__(self, fname):
-        ncfile     = NWS_dataformat.NWSDataSet(fname)
-        ## file name corresponding to loaded data set
-        self.fname = fname
-        nx, ny, lon0, lat0, dlon, dlat = ncfile._extract_2D_grid_params()
-        cellw0                         = ncfile._extract_3D_cellw0()
-        ncfile.close()
-        #
-        LonLatZGrid.__init__(self,  nx, ny, lon0, lat0, dlon, dlat, cellw0)
-    
-    
-        
 
-        
-#################### self test #########################
-#
-#  mid North Sea test point: ix,iy = 210,240
-#
-if __name__ == "__main__":
-    _verbose = True
-    #g3D = NWSGrid_3D("../../../tmp/MetO-NWS-PHYS-hi-TEM.nc", "votemper")
-    g3D = NWSGrid_3D("../../../tmp/MetO-NWS-PHYS-hi-TEM.nc")
-    for x in arange(-1, 12, 0.001):
-        try:
-            wd = g3D.interpolate_wdepth((x,54.13))
-            print x,wd
-        except:
-            pass
+class NWS_Grid_3D(CMEMS_Grid_3D):
+    #  ----------------------------------------------------------------------------------------
+    resolve_topo_varnames_3D = NWS_variablenames_3D  # valid variables to resolve 3D topography
+    #  ----------------------------------------------------------------------------------------
     
-                    
-         
+    
+        
+if __name__ == "__main__":
+    g2D = NWS_Grid_2D("data/MetO-NWS-PHYS-hi-TEM.nc")
+    print "nx=%d ny=%d" % (g2D.nx, g2D.ny)
+    g3D = NWS_Grid_3D("data/MetO-NWS-PHYS-hi-TEM.nc")
+    print "nx=%d ny=%d nz=%d" % (g3D.nx, g3D.ny, g3D.nz)

@@ -1,39 +1,20 @@
 #!/usr/bin/env python
 
-import sys; sys.path[1:1] = ["../../.."]; print "fix sys.path hack"
+
 from GridWetData.grids import *
 import re
 
 ################################################################################
-#               Raw CMEMS NWS data query utilities
+#               Raw CMEMS data query utilities
 ################################################################################
 #  
-#  Since grid information is contained in any data file, NWSGrids does not have
-#  a separate grid descriptor, but grid information is extracetd from any data file
-#  The dictionary below is a mapping of the known data variable names in the CMEMS NWS
-#  data set. It is a user convenience used for inferring the topography from a
-#  data set so that the user does not have to provide an explicit variable name
-#  that should be used for probing the topography, but can just point to a data file
+#  Since grid information is contained in any data file, CMEMS_Grids does not load
+#  a separate grid descriptor, but extracts grid information from any data file
+#  Sub classes of CMEMS_Grids provide lookup variable name tables, corresponding to
+#  specific data sets 
 
 
 _verbose = False
-
-NWS_variablenames_3D = {"temperature"             : "votemper",
-                        "salinity"                : "vosaline",
-                        "east_current"            : "vozocrtx",
-                        "north_Current"           : "vomecrty",
-                        "volume_beam_attenuation" : "attn",
-                        "chlorophyll"             : "CHL",
-                        "dissolved_oxygen"        : "O2o",
-                        "nitrate"                 : "N3n",
-                        "phosphate"               : "N1p",
-                        "phytoplankton"           : "PhytoC",
-                        "primary_productivity"    : "netPP"} 
-
-NWS_variablenames_2D = {"sea_floor_temperature" : "sotemper", 
-                        "mixed_layer_thickness" : "karamld", 
-                        "sea_surface_height"    : "sossheig"}
-
 
     
 _time_offset = datetime(2014,1,1)
@@ -86,7 +67,7 @@ def _cc2lw(cc):
 # 
 #    base class: http://unidata.github.io/netcdf4-python/
 # ==============================================================================
-class NWSDataSet:
+class CMEMS_DataSet:
     def __init__(self, *args, **kwargs):
         self.ncf = netcdf.Dataset(*args, **kwargs)
         self._update_time_hash()
@@ -129,9 +110,7 @@ class NWSDataSet:
         #
         dtsec0 = int(0.5 + (toff - _time_offset).total_seconds())
         t = self.ncf.variables["time"][:]
-        if t.dtype == float:
-                t = asarray(0.5 + t, int) # 0.5 : protect against down rounding
-        self.timehash = tsca*t + dtsec0   # int vector
+        self.timehash = asarray(0.5 + tsca*t + dtsec0, int)   # round to int vector
 
             
     def get_time_interpolation_bracket(self, when):
@@ -177,17 +156,16 @@ class NWSDataSet:
         return nx, ny, lonvec[0], latvec[0], dlon, dlat
 
         
-    def _extract_3D_cellw0(self, diagvarname=NWS_variablenames_3D):
+    def _extract_3D_cellw0(self, diagvarname):
         #  ------------------------------------------------------------------------
         ## Extract cell widths cellw0(nx,ny,nz) from open netCDF file ncf
-        #  @param self            open netCDF file
-        #  @param diagvarname    name of variable from which to detect topography (optional)
+        #  @param self           open netCDF file
+        #  @param diagvarname    name of variable / variable name table, from which to detect topography
         #  @return               cellw0(nx,ny,nz)  (array of cell widths, -1 for dry cells)
         #
         #  assume cellw0 is time independent (pick time frame 0)
-        #  Assess topography by probing for mask==True at data variable diagvarname in ncf.
-        #  If optional parameter diagvarname is not present, it defaults to an entry
-        #  in a pre-coded catalogue of variable names to look for (NWS_variablenames).
+        #  Assess topography by probing for mask==True at data variable / table entry diagvarname in ncf.
+        #  if diagvarname == None is passed, a KeyError will be raised
         #  If lookup fails an exception is raised 
         #
         #  Data variables are apparently loaded as masked arrays by
@@ -198,14 +176,19 @@ class NWSDataSet:
         #
         # ------ identify topography probing variable ------
         #
-        if (diagvarname == NWS_variablenames_3D):   # search pre-coded catalogue
-            for vnam in NWS_variablenames_3D.values():
+        if isinstance(diagvarname, dict): # search a pre-coded catalogue - pick first match
+            for vnam in diagvarname.values():
                 if vnam in self.ncf.variables.keys(): # found a match in pre-coded catalogue
                     break
             else:
-                raise exceptions.LookupError("_extract_3D_cellw0: netCDF file %s does not contain a known data variable" % self.ncf.filepath())
-        else:
+                msg = "_extract_3D_cellw0: netCDF file %s does not contain a known data variable" % self.ncf.filepath()
+                raise exceptions.LookupError(msg)
+        else: # a specific variable name was provided
             vnam = diagvarname
+            if not self.ncf.variables.has_key(vnam):
+                msg = "_extract_3D_cellw0: netCDF file %s does not have variable %s" % (self.ncf.filepath(), str(vnam))
+                raise exceptions.LookupError(msg)
+            
         var           = self.ncf.variables[vnam][0,:]     # topography test variable, asked array, shape == (time, depth, lat, lon)
         var           = swapaxes(var, 0, 2)          # now shape = (lon, lat, depth)
         #
@@ -262,12 +245,11 @@ class NWSDataSet:
 #
 if __name__ == "__main__":
     _verbose = True
-    raw = NWSDataSet("../../../tmp/MetO-NWS-PHYS-hi-TEM.nc")
+    raw = CMEMS_DataSet("data/MetO-NWS-PHYS-hi-TEM.nc")
     v = raw.get_time_frame("votemper", 3)
     print v[210,240,:]
-    #print raw.get_time_interpolation_bracket(datetime(2015,7,3,23,59))
-    #NWSGrid_3D("../../../tmp/MetO-NWS-PHYS-hi-TEM.nc", "votemper")
-    #g3D = NWSGrid_3D("../../../tmp/MetO-NWS-PHYS-hi-TEM.nc")
+    print raw.get_wetmask("votemper")[210,240,:]
+    
     
     
                     

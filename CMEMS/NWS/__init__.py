@@ -27,4 +27,3 @@
 from NWS_grid_data import *   # triggers import of data_manager, grids and support libraries
 import NWS_grids              # offer encapsulated environment for import GridWetData.CMEMS.NWS.NWS_grids
 import NWS_grid_data          # offer encapsulated environment for import GridWetData.CMEMS.NWS.NWS_grid_data
-import NWS_dataformat         # raw access utilities
