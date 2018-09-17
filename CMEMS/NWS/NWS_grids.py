@@ -6,7 +6,7 @@ from GridWetData.CMEMS.CMEMS_grids import *
 NWS_variablenames_3D = {"temperature"             : "votemper",
                         "salinity"                : "vosaline",
                         "east_current"            : "vozocrtx",
-                        "north_Current"           : "vomecrty",
+                        "north_current"           : "vomecrty",
                         "volume_beam_attenuation" : "attn",
                         "chlorophyll"             : "CHL",
                         "dissolved_oxygen"        : "O2o",
