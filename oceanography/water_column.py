@@ -14,7 +14,101 @@ from scipy.interpolate import *
 _thisdir         = os.path.dirname(__file__)  # allow remote import
 _verbose         = False # True  # log info
 
+## fit 3 pts to parabola by naive 3x3 fit as y(z) = a*z**2 + b*z + c
+#  @param z      : z0,z1,z2
+#  @param y      : y0,y1,y2
+#  @return a,b,c,problem_solvable
+def fit_3pt_to_parabola(z, y):
+    assert len(z) == 3 
+    assert len(y) == 3 
+    det = (-z[1] + z[2])*z[0]**2 + (z[0] - z[2])*z[1]**2 + (-z[0] + z[1])*z[2]**2
+    problem_solvable = abs(det)>1e-20
+    if problem_solvable: # non singular situation
+        a   = (z[2]*(y[0] - y[1]) + z[0]*(y[1] - y[2]) + z[1]*(-y[0] + y[2]))/det    
+        b   = ((-y[1] + y[2])*z[0]**2 + (y[0] - y[2])*z[1]**2 + (-y[0] + y[1])*z[2]**2) / det   
+        c   = ((z[2]*y[1] - z[1]*y[2])*z[0]**2 + (-z[2]*y[0] + z[0]*y[2])*z[1]**2 +
+               (z[1]*y[0] - z[0]*y[1])*z[2]**2) / det   
+    else: # singular situation
+        a = 0.
+        b = 0.
+        c = 0.
+    return a,b,c,problem_solvable
 
+def point_with_largest_value(z0,v0,z1,v1):
+    if v1>v0:
+        return z1,v1
+    else:
+        return z0,v0
+    
+## Find the maximum value of a scalar and the depth of the maximum for a set of vertical columns
+#  @param z      shape (npt,nz) : npt vertical columns of depths (ascending order), each with nz points corresponding to y
+#  @param y      shape (npt,nz) : npt vertical columns of scalar, each with nz points
+#  @param blay   shape (npt,)   : highest wet point index in column; blay < 0 indicates a dry column
+#  @param zstep                 : (optional) z step for spline curvature refit
+#  @param zdry                  : (optional) depth value to apply in output for dry points
+#  @param dryval                : (optional) max-gradient value to apply in output for dry points
+#
+#  fit cubic spline to (z, y). If no interior maxima, select end point with max value
+def find_maximum_value(z, y, blay, zstep=1.0, zdry=0.0, dryval=0.0):
+    maxval = []
+    zmax   = []
+    # ---- loop over all vertical columns ----
+    for zv,yv,ib in zip(z, y, blay):
+        if ib < 0:    # --- dry point
+            maxval.append(dryval)
+            zmax.append(   zdry   )
+        elif ib == 0: # --- single layer situation (assign that value + depth)
+            maxval.append( yv[0] ) # assign that value
+            zmax.append(   zv[0] ) # assign that depth
+        elif ib == 1: # --- double layer situation (linear case, select max end point)
+            zz,yy = point_with_largest_value(zv[0],yv[0],zv[1],yv[1])
+            maxval.append(yy) # max end point
+            zmax.append(zz)   # z for max end point
+        elif ib == 2: # --- parabolic situation - max at bound or top
+            a,b,c,problem_solvable = fit_3pt_to_parabola(zv, yv)
+            # non singular situation + concave + interior max (rely on left-to-right evaluation)
+            if problem_solvable and a < -1e-20 and (zv[0] < -b/2/a < zv[2]):
+                ztop = -b/2/a
+                maxval.append(a*ztop**2 + b*ztop + c)
+                zmax.append(ztop)
+            else: # all other cases, max at end point
+                zz,yy = point_with_largest_value(zv[0],yv[0],zv[2],yv[2])
+                maxval.append(yy) # max end point
+                zmax.append(zz)   # z for max end point
+        else: # --- apply cubic spline for more than 3 data points (most cases should end here)
+            zv = zv[:(ib+1)] # waste dry parts of water column
+            yv = yv[:(ib+1)] # waste dry parts of water column
+            spli       = UnivariateSpline(zv, yv, s=0)  # s=0: no smoothing
+            dspli_dz   = spli.derivative(1)      
+            d2spli_dz2 = spli.derivative(2)
+            # currently finding roots unsupported for non-cubic splines, so refit dspli_dz
+            zsampl     = arange(zv[0], zv[-1], zstep)
+            if len(zsampl)<4:
+                zsampl = linspace(zv[0], zv[-1], 4) # sampling distance < zstep
+            drefit = UnivariateSpline(zsampl, dspli_dz(zsampl), s=0) # required to apply root()
+            roots      = drefit.roots()   # max/min
+            if len(roots)>0: # interior max/min values
+                best_maxval = -1e20
+                z_at_maxval = None
+                for z in roots:
+                    value = spli(z)
+                    print z,value,d2spli_dz2(z)
+                    if d2spli_dz2(z)<0 and value > best_maxval:
+                        best_maxval = value
+                        z_at_maxval = z
+                if z_at_maxval is None: # no maxima in roots of dspli_dz
+                    zz,yy = point_with_largest_value(zv[0],yv[0],zv[-1],yv[-1])
+                    maxval.append(yy) # max end point
+                    zmax.append(zz)   # z for max end point
+                else:
+                    maxval.append(best_maxval) # apply best max 
+                    zmax.append(z_at_maxval)   # z for best max 
+            else:  # max/min at end points
+                zz,yy = point_with_largest_value(zv[0],yv[0],zv[-1],yv[-1])
+                maxval.append(yy) # max end point
+                zmax.append(zz)   # z for max end point
+    # for yv,zv,ib
+    return array(zmax, float), array(maxval, float)
 
 
 ## Find the highest gradient of a scalar and the depth of the maximum gradient for a set of vertical columns
@@ -42,12 +136,8 @@ def find_highest_gradient(z, y, blay, zstep=1.0, zdry=0.0, graddry=0.0):
             gradmax.append((yv[1]-yv[0])/(zv[1]-zv[0]) ) # linear interpolation
             zmax.append(    0.5*(zv[0]+zv[1]) )          # midpoint
         elif ib == 2: # --- parabolic situation - max grad at upper/lower bound
-            det = (-zv[1] + zv[2])*zv[0]**2 + (zv[0] - zv[2])*zv[1]**2 + (-zv[0] + zv[1])*zv[2]**2
-            if abs(det)>1e-20: # non singular situation
-                a   = (zv[2]*(yv[0] - yv[1]) + zv[0]*(yv[1] - yv[2]) + zv[1]*(-yv[0] + yv[2]))/det    
-                b   = ((-yv[1] + yv[2])*zv[0]**2 + (yv[0] - yv[2])*zv[1]**2 + (-yv[0] + yv[1])*zv[2]**2) / det   
-                c   = ((zv[2]*yv[1] - zv[1]*yv[2])*zv[0]**2 + (-zv[2]*yv[0] + zv[0]*yv[2])*zv[1]**2 +
-                       (zv[1]*yv[0] - zv[0]*yv[1])*zv[2]**2) / det   
+            a,b,c,problem_solvable = fit_3pt_to_parabola(zv, yv)
+            if problem_solvable: # non singular situation
                 dydz0 = 2*a*zv[0] + b
                 dydz2 = 2*a*zv[2] + b
                 if dydz0>dydz2:
@@ -68,6 +158,7 @@ def find_highest_gradient(z, y, blay, zstep=1.0, zdry=0.0, graddry=0.0):
             zsampl     = arange(zv[0], zv[-1], zstep)
             if len(zsampl)<4:
                 zsampl = linspace(zv[0], zv[-1], 4) # sampling distance < zstep
+            # currently finding roots unsupported for non-cubic splines, so refit dspli_dz
             d2refit = UnivariateSpline(zsampl, d2spli_dz2(zsampl), s=0) # required to apply root()
             roots = d2refit.roots()   # max/min gradients
             if len(roots)>0: # interior max/min gradients
@@ -110,12 +201,8 @@ def find_lowest_gradient(z, y, blay, zstep=1.0, zdry=0.0, graddry=0.0):
             gradmin.append((yv[1]-yv[0])/(zv[1]-zv[0]) ) # linear interpolation
             zmin.append(    0.5*(zv[0]+zv[1]) )          # midpoint
         elif ib == 2: # --- parabolic situation - min grad at upper/lower bound
-            det = (-zv[1] + zv[2])*zv[0]**2 + (zv[0] - zv[2])*zv[1]**2 + (-zv[0] + zv[1])*zv[2]**2
-            if abs(det)>1e-20: # non singular situation
-                a   = (zv[2]*(yv[0] - yv[1]) + zv[0]*(yv[1] - yv[2]) + zv[1]*(-yv[0] + yv[2]))/det    
-                b   = ((-yv[1] + yv[2])*zv[0]**2 + (yv[0] - yv[2])*zv[1]**2 + (-yv[0] + yv[1])*zv[2]**2) / det   
-                c   = ((zv[2]*yv[1] - zv[1]*yv[2])*zv[0]**2 + (-zv[2]*yv[0] + zv[0]*yv[2])*zv[1]**2 +
-                       (zv[1]*yv[0] - zv[0]*yv[1])*zv[2]**2) / det   
+            a,b,c,problem_solvable = fit_3pt_to_parabola(zv, yv)
+            if problem_solvable: # non singular situation
                 dydz0 = 2*a*zv[0] + b
                 dydz2 = 2*a*zv[2] + b
                 if dydz0<dydz2:  # NB: opposite find_highest_gradient
@@ -279,16 +366,20 @@ def rho_UNESCO(ss,tt,pp):
 
     
 
-# --- test 
-z = linspace(0, 40, 100)
-s = linspace(30, 35, 100)
-t = linspace(15, 5, 100)
-#y = 1.0/(1+exp(-0.3*(z-17)))
-#print find_max_vertical_gradient([z], [y], [len(z)-1])
-#for zz,yy in zip(z,y):
-#    print zz,yy 
-#print find_lowest_gradient([z], [y], [len(z)-1])
-#
-#rhow = evaluate_water_density(array([z]), array([s]), array([t]))
-#for (zz,dens) in zip(z,rhow[0]):
-#    print zz,dens
+# --- test
+if __name__ == "__main__":
+    z = linspace(0, 40, 100)
+    #s = linspace(30, 35, 100)
+    #t = linspace(15, 5, 100)
+    #y = 1.0/(1+exp(-0.3*(z-17)))
+    #print find_max_vertical_gradient([z], [y], [len(z)-1])
+    #for zz,yy in zip(z,y):
+    #    print zz,yy 
+    #print find_lowest_gradient([z], [y], [len(z)-1])
+    #
+    #rhow = evaluate_water_density(array([z]), array([s]), array([t]))
+    #for (zz,dens) in zip(z,rhow[0]):
+    #    print zz,dens
+    y = z*z*exp(-z)
+    print find_maximum_value([z], [y], [len(z)-1])
+    
