@@ -41,230 +41,264 @@ def point_with_largest_value(z0,v0,z1,v1):
         return z0,v0
     
 ## Find the maximum value of a scalar and the depth of the maximum for a set of vertical columns
-#  @param z      shape (npt,nz) : npt vertical columns of depths (ascending order), each with nz points corresponding to y
-#  @param y      shape (npt,nz) : npt vertical columns of scalar, each with nz points
-#  @param blay   shape (npt,)   : highest wet point index in column; blay < 0 indicates a dry column
-#  @param zstep                 : (optional) z step for spline curvature refit
-#  @param zdry                  : (optional) depth value to apply in output for dry points
-#  @param dryval                : (optional) max-gradient value to apply in output for dry points
-#
+#  @param zv      shape (nz,) : vertical columns of depths (ascending order) with nz points
+#  @param yv      shape (nz,) : vertical columns of scalar with nz values (at points zv)
+#  @param ib                  : highest wet point index in column; ib < 0 indicates a dry column
+#  @param zstep               : (optional) z step for spline curvature refit
+#  @param zdry                : (optional) depth value to apply in output for dry points
+#  @param dryval              : (optional) max-gradient value to apply in output for dry points
+#  @return zmax, maxval       : depth at maximum yv and value of maximum yv
+#  
 #  fit cubic spline to (z, y). If no interior maxima, select end point with max value
-def find_maximum_value(z, y, blay, zstep=1.0, zdry=0.0, dryval=0.0):
-    maxval = []
-    zmax   = []
-    # ---- loop over all vertical columns ----
-    for zv,yv,ib in zip(z, y, blay):
-        if ib < 0:    # --- dry point
-            maxval.append(dryval)
-            zmax.append(   zdry   )
-        elif ib == 0: # --- single layer situation (assign that value + depth)
-            maxval.append( yv[0] ) # assign that value
-            zmax.append(   zv[0] ) # assign that depth
-        elif ib == 1: # --- double layer situation (linear case, select max end point)
-            zz,yy = point_with_largest_value(zv[0],yv[0],zv[1],yv[1])
-            maxval.append(yy) # max end point
-            zmax.append(zz)   # z for max end point
-        elif ib == 2: # --- parabolic situation - max at bound or top
-            a,b,c,problem_solvable = fit_3pt_to_parabola(zv[:3], yv[:3])
-            # non singular situation + concave + interior max (rely on left-to-right evaluation)
-            if problem_solvable and a < -1e-20 and (zv[0] < -b/2/a < zv[2]):
-                ztop = -b/2/a
-                maxval.append(a*ztop**2 + b*ztop + c)
-                zmax.append(ztop)
-            else: # all other cases, max at end point
-                zz,yy = point_with_largest_value(zv[0],yv[0],zv[2],yv[2])
-                maxval.append(yy) # max end point
-                zmax.append(zz)   # z for max end point
-        else: # --- apply cubic spline for more than 3 data points (most cases should end here)
-            zv = zv[:(ib+1)] # waste dry parts of water column
-            yv = yv[:(ib+1)] # waste dry parts of water column
-            spli       = UnivariateSpline(zv, yv, s=0)  # s=0: no smoothing
-            dspli_dz   = spli.derivative(1)      
-            d2spli_dz2 = spli.derivative(2)
-            # currently finding roots unsupported for non-cubic splines, so refit dspli_dz
-            zsampl     = arange(zv[0], zv[-1], zstep)
-            if len(zsampl)<4:
-                zsampl = linspace(zv[0], zv[-1], 4) # sampling distance < zstep
-            drefit = UnivariateSpline(zsampl, dspli_dz(zsampl), s=0) # required to apply root()
-            roots      = drefit.roots()   # max/min
-            if len(roots)>0: # interior max/min values
-                best_maxval = -1e20
-                z_at_maxval = None
-                for z in roots:
-                    value = spli(z)
-                    if d2spli_dz2(z)<0 and value > best_maxval:
-                        best_maxval = value
-                        z_at_maxval = z
-                if z_at_maxval is None: # no maxima in roots of dspli_dz
-                    zz,yy = point_with_largest_value(zv[0],yv[0],zv[-1],yv[-1])
-                    maxval.append(yy) # max end point
-                    zmax.append(zz)   # z for max end point
-                else:
-                    maxval.append(best_maxval) # apply best max 
-                    zmax.append(z_at_maxval)   # z for best max 
-            else:  # max/min at end points
-                zz,yy = point_with_largest_value(zv[0],yv[0],zv[-1],yv[-1])
-                maxval.append(yy) # max end point
-                zmax.append(zz)   # z for max end point
-    # for yv,zv,ib
-    return array(zmax, float), array(maxval, float)
+def find_maximum_value(zv, yv, ib, zstep=1.0, zdry=0.0, dryval=0.0):
+    #
+    # --- branch out depending on number of points ib in water column
+    #
+    if ib < 0:    # --- dry point
+        
+        return zdry, dryval
+    
+    elif ib == 0: # --- single layer situation (assign that value + depth)
+        
+        return zv[0], yv[0] # assign that depth and value
+        
+    elif ib == 1: # --- double layer situation (linear case, select max end point)
+        
+        return point_with_largest_value(zv[0],yv[0],zv[1],yv[1])
+        
+    elif ib == 2: # --- parabolic situation - max at bound or top
+        
+        a,b,c,problem_solvable = fit_3pt_to_parabola(zv[:3], yv[:3])
+        # non singular situation + concave + interior max (rely on left-to-right evaluation)
+        if problem_solvable and a < -1e-20 and (zv[0] < -b/2/a < zv[2]):
+            ztop = -b/2/a
+            return ztop, a*ztop**2 + b*ztop + c
+        else: # all other cases, max at end point
+            return point_with_largest_value(zv[0],yv[0],zv[2],yv[2])
+            
+    else: # --- apply cubic spline for more than 3 data points (most cases should end here)
+        
+        zv = zv[:(ib+1)] # waste dry parts of water column
+        yv = yv[:(ib+1)] # waste dry parts of water column
+        spli       = UnivariateSpline(zv, yv, s=0)  # s=0: no smoothing
+        dspli_dz   = spli.derivative(1)      
+        d2spli_dz2 = spli.derivative(2)
+        # currently finding roots unsupported for non-cubic splines, so refit dspli_dz
+        zsampl     = arange(zv[0], zv[-1], zstep)
+        if len(zsampl)<4:
+            zsampl = linspace(zv[0], zv[-1], 4) # sampling distance < zstep
+        drefit = UnivariateSpline(zsampl, dspli_dz(zsampl), s=0) # required to apply root()
+        roots      = drefit.roots()   # max/min
+        if len(roots)>0: # interior max/min values
+            best_maxval = -1e20
+            z_at_maxval = None
+            for z in roots:
+                value = spli(z)
+                if d2spli_dz2(z)<0 and value > best_maxval:
+                    best_maxval = value
+                    z_at_maxval = z
+            if z_at_maxval is None: # no maxima in roots of dspli_dz
+                return point_with_largest_value(zv[0],yv[0],zv[-1],yv[-1])
+            else:
+                return z_at_maxval, best_maxval # z for best max and best max
+        else:  # max/min at end points
+            return  point_with_largest_value(zv[0],yv[0],zv[-1],yv[-1])
+            
 
 
 ## Find the highest gradient of a scalar and the depth of the maximum gradient for a set of vertical columns
-#  @param z      shape (npt,nz) : npt vertical columns of depths (ascending order), each with nz points corresponding to y
-#  @param y      shape (npt,nz) : npt vertical columns of scalar, each with nz points
-#  @param blay   shape (npt,)   : highest wet point index in column; blay < 0 indicates a dry column
+#  @param zv      shape (nz,) : vertical columns of depths (ascending order) with nz points
+#  @param yv      shape (nz,) : vertical columns of scalar with nz values (at points zv)
+#  @param ib                  : highest wet point index in column; ib < 0 indicates a dry column
 #  @param zstep                 : (optional) z step for spline curvature refit
 #  @param zdry                  : (optional) depth value to apply in output for dry points
 #  @param graddry               : (optional) max-gradient value to apply in output for dry points
+#  @return zmax, gradmax        : depth of the maximum gradient and value of maximum gradient
 #
 #  fit cubic spline to (z, y). Refit cubic spline to second derivative and detect max gradients.
 #  of no interior max gradients, select end point with max gradient; linear limit: select mid point
-def find_highest_gradient(z, y, blay, zstep=1.0, zdry=0.0, graddry=0.0):
-    gradmax = []
-    zmax    = []
-    # ---- loop over all vertical columns ----
-    for zv,yv,ib in zip(z, y, blay):
-        if ib < 0:    # --- dry point
-            gradmax.append(graddry)
-            zmax.append(   zdry   )
-        elif ib == 0: # --- single layer situation (no gradient assigned)
-            gradmax.append( 0.0  ) # only sensible value
-            zmax.append(   zv[0] ) # assign gradient to layer position
-        elif ib == 1: # --- double layer situation (set mid point)
-            gradmax.append((yv[1]-yv[0])/(zv[1]-zv[0]) ) # linear interpolation
-            zmax.append(    0.5*(zv[0]+zv[1]) )          # midpoint
-        elif ib == 2: # --- parabolic situation - max grad at upper/lower bound
-            a,b,c,problem_solvable = fit_3pt_to_parabola(zv[:3], yv[:3])
-            if problem_solvable: # non singular situation
-                dydz0 = 2*a*zv[0] + b
-                dydz2 = 2*a*zv[2] + b
-                if dydz0>dydz2:
-                    gradmax.append( dydz0 )
-                    zmax.append(    zv[0] )
-                else:
-                    gradmax.append( dydz2 )
-                    zmax.append(    zv[2] )
-            else: # singular situation -> apply linear limit
-                gradmax.append((yv[2]-yv[0])/(zv[2]-zv[0]) ) # linear interpolation
-                zmax.append(    0.5*(zv[0]+zv[2]) )          # midpoint
-        else: # --- apply cubic spline for more than 3 data points (most cases should end here)
-            zv = zv[:(ib+1)] # waste dry parts of water column
-            yv = yv[:(ib+1)] # waste dry parts of water column
-            spli       = UnivariateSpline(zv, yv, s=0)  # s=0: no smoothing
-            dspli_dz   = spli.derivative(1)      
-            d2spli_dz2 = spli.derivative(2)
-            zsampl     = arange(zv[0], zv[-1], zstep)
-            if len(zsampl)<4:
-                zsampl = linspace(zv[0], zv[-1], 4) # sampling distance < zstep
-            # currently finding roots unsupported for non-cubic splines, so refit dspli_dz
-            d2refit = UnivariateSpline(zsampl, d2spli_dz2(zsampl), s=0) # required to apply root()
-            roots = d2refit.roots()   # max/min gradients
-            if len(roots)>0: # interior max/min gradients
-                dydz = dspli_dz(roots)
-                imax = argmax(dydz)
-                gradmax.append( dydz[imax] )
-                zmax.append(    roots[imax] )
-            else:  # max/min gradients at end points
-                zendpt = [zv[0], zv[-1]]
-                dydz   =  dspli_dz( zendpt )
-                imax = argmax(dydz)
-                gradmax.append( dydz[imax] )
-                zmax.append(    zendpt[imax] )
-    # for yv,zv,ib
-    return array(zmax, float), array(gradmax, float)
+def find_highest_gradient(zv, yv, ib, zstep=1.0, zdry=0.0, graddry=0.0):
+    #
+    # --- branch out depending on number of points ib in water column
+    #
+    if ib < 0:    # --- dry point
+
+        return zdry, graddry
+        
+    elif ib == 0: # --- single layer situation (no gradient assigned)
+
+        return zv[0], 0.0 # assign gradient to layer position and only sensible value
+       
+    elif ib == 1: # --- double layer situation (set mid point)
+
+        return 0.5*(zv[0]+zv[1]), (yv[1]-yv[0])/(zv[1]-zv[0]) # midpoint and linear interpolation
+        
+    elif ib == 2: # --- parabolic situation - max grad at upper/lower bound
+        a,b,c,problem_solvable = fit_3pt_to_parabola(zv[:3], yv[:3])
+        if problem_solvable: # non singular situation
+            dydz0 = 2*a*zv[0] + b
+            dydz2 = 2*a*zv[2] + b
+            if dydz0>dydz2:
+                return zv[0], dydz0
+            else:
+                return zv[2], dydz2
+        else: # singular situation -> apply linear limit
+            return 0.5*(zv[0]+zv[2]), (yv[2]-yv[0])/(zv[2]-zv[0]) # midpoint and linear interpolation
+            
+    else: # --- apply cubic spline for more than 3 data points (most cases should end here)
+        
+        zv = zv[:(ib+1)] # waste dry parts of water column
+        yv = yv[:(ib+1)] # waste dry parts of water column
+        spli       = UnivariateSpline(zv, yv, s=0)  # s=0: no smoothing
+        dspli_dz   = spli.derivative(1)      
+        d2spli_dz2 = spli.derivative(2)
+        zsampl     = arange(zv[0], zv[-1], zstep)
+        if len(zsampl)<4:
+            zsampl = linspace(zv[0], zv[-1], 4) # sampling distance < zstep
+        # currently finding roots unsupported for non-cubic splines, so refit dspli_dz
+        d2refit = UnivariateSpline(zsampl, d2spli_dz2(zsampl), s=0) # required to apply root()
+        roots = d2refit.roots()   # max/min gradients
+        if len(roots)>0: # interior max/min gradients
+            dydz = dspli_dz(roots)
+            imax = argmax(dydz)
+            return roots[imax], dydz[imax]
+        else:  # max/min gradients at end points
+            zendpt = [zv[0], zv[-1]]
+            dydz   =  dspli_dz( zendpt )
+            imax = argmax(dydz)
+            return zendpt[imax], dydz[imax]
+
 
 
 ## Find the lowest gradient of a scalar and the depth of the minimum gradient for a set of vertical columns
-#  @param z      shape (npt,nz) : npt vertical columns of depths (ascending order), each with nz points corresponding to y
-#  @param y      shape (npt,nz) : npt vertical columns of scalar, each with nz points
-#  @param blay   shape (npt,)   : highest wet point index in column; blay < 0 indicates a dry column
-#  @param zstep                 : (optional) z step for spline curvature refit
-#  @param zdry                  : (optional) depth value to apply in output for dry points
-#  @param graddry               : (optional) max-gradient value to apply in output for dry points
+#  @param zv      shape (nz,) : vertical columns of depths (ascending order) with nz points
+#  @param yv      shape (nz,) : vertical columns of scalar with nz values (at points zv)
+#  @param ib                  : highest wet point index in column; ib < 0 indicates a dry column
+#  @param zstep               : (optional) z step for spline curvature refit
+#  @param zdry                : (optional) depth value to apply in output for dry points
+#  @param graddry             : (optional) max-gradient value to apply in output for dry points
+#  @return zmin, gradmin      : depth at minimum gradient and value of minimum gradient of yv
 #
 #  fit cubic spline to (z, y). Refit cubic spline to second derivative and detect max gradients.
 #  of no interior max gradients, select end point with max gradient; linear limit: select mid point
-def find_lowest_gradient(z, y, blay, zstep=1.0, zdry=0.0, graddry=0.0):
-    gradmin = []
-    zmin    = []
-    # ---- loop over all vertical columns ----
-    for zv,yv,ib in zip(z, y, blay):
-        if ib < 0:    # --- dry point
-            gradmin.append(graddry)
-            zmin.append(   zdry   )
-        elif ib == 0: # --- single layer situation (no gradient assigned)
-            gradmin.append( 0.0  ) # only sensible value
-            zmin.append(   zv[0] ) # assign gradient to layer position
-        elif ib == 1: # --- double layer situation (set mid point)
-            gradmin.append((yv[1]-yv[0])/(zv[1]-zv[0]) ) # linear interpolation
-            zmin.append(    0.5*(zv[0]+zv[1]) )          # midpoint
-        elif ib == 2: # --- parabolic situation - min grad at upper/lower bound
-            a,b,c,problem_solvable = fit_3pt_to_parabola(zv[:3], yv[:3])
-            if problem_solvable: # non singular situation
-                dydz0 = 2*a*zv[0] + b
-                dydz2 = 2*a*zv[2] + b
-                if dydz0<dydz2:  # NB: opposite find_highest_gradient
-                    gradmin.append( dydz0 )
-                    zmin.append(    zv[0] )
-                else:
-                    gradmin.append( dydz2 )
-                    zmin.append(    zv[2] )
-            else: # singular situation -> apply linear limit
-                gradmin.append((yv[2]-yv[0])/(zv[2]-zv[0]) ) # linear interpolation
-                zmin.append(    0.5*(zv[0]+zv[2]) )          # midpoint
-        else: # --- apply cubic spline for more than 3 data points (most cases should end here)
-            zv = zv[:(ib+1)] # waste dry parts of water column
-            yv = yv[:(ib+1)] # waste dry parts of water column
-            spli       = UnivariateSpline(zv, yv, s=0)  # s=0: no smoothing
-            dspli_dz   = spli.derivative(1)      
-            d2spli_dz2 = spli.derivative(2)
-            zsampl     = arange(zv[0], zv[-1], zstep)
-            if len(zsampl)<4:
-                zsampl = linspace(zv[0], zv[-1], 4) # sampling distance < zstep
-            d2refit = UnivariateSpline(zsampl, d2spli_dz2(zsampl), s=0) # required to apply root()
-            roots = d2refit.roots()   # max/min gradients
-            if len(roots)>0: # interior max/min gradients
-                dydz = dspli_dz(roots)
-                imin = argmin(dydz)  # NB: opposite find_highest_gradient
-                gradmin.append( dydz[imin] )
-                zmin.append(    roots[imin] )
-            else:  # max/min gradients at end points
-                zendpt = [zv[0], zv[-1]]
-                dydz   =  dspli_dz( zendpt )
-                imin = argmin(dydz)  # NB: opposite find_highest_gradient
-                gradmin.append( dydz[imin] )
-                zmin.append(    zendpt[imin] )
-    # for yv,zv,ib
-    return array(zmin, float), array(gradmin, float)
+def find_lowest_gradient(zv, yv, ib, zstep=1.0, zdry=0.0, graddry=0.0):
+    #
+    # --- branch out depending on number of points ib in water column
+    #
+    if ib < 0:    # --- dry point
+
+        return zdry, graddry
+        
+    elif ib == 0: # --- single layer situation (no gradient assigned)
+
+        return zv[0], 0.0  # assign gradient to layer position and only sensible value
+        
+    elif ib == 1: # --- double layer situation (set mid point)
+
+        return 0.5*(zv[0]+zv[1]), (yv[1]-yv[0])/(zv[1]-zv[0]) # midpoint and linear interpolation
+       
+    elif ib == 2: # --- parabolic situation - min grad at upper/lower bound
+        
+        a,b,c,problem_solvable = fit_3pt_to_parabola(zv[:3], yv[:3])
+        if problem_solvable: # non singular situation
+            dydz0 = 2*a*zv[0] + b
+            dydz2 = 2*a*zv[2] + b
+            if dydz0<dydz2:  # NB: opposite find_highest_gradient
+                return zv[0], dydz0
+            else:
+                return zv[2], dydz2
+        else: # singular situation -> apply linear limit
+            return 0.5*(zv[0]+zv[2]), (yv[2]-yv[0])/(zv[2]-zv[0]) # midpoint and linear interpolation
+            
+    else: # --- apply cubic spline for more than 3 data points (most cases should end here)
+        
+        zv = zv[:(ib+1)] # waste dry parts of water column
+        yv = yv[:(ib+1)] # waste dry parts of water column
+        spli       = UnivariateSpline(zv, yv, s=0)  # s=0: no smoothing
+        dspli_dz   = spli.derivative(1)      
+        d2spli_dz2 = spli.derivative(2)
+        zsampl     = arange(zv[0], zv[-1], zstep)
+        if len(zsampl)<4:
+            zsampl = linspace(zv[0], zv[-1], 4) # sampling distance < zstep
+        d2refit = UnivariateSpline(zsampl, d2spli_dz2(zsampl), s=0) # required to apply root()
+        roots = d2refit.roots()   # max/min gradients
+        if len(roots)>0: # interior max/min gradients
+            dydz = dspli_dz(roots)
+            imin = argmin(dydz)  # NB: opposite find_highest_gradient
+            return roots[imin], dydz[imin] 
+        else:  # max/min gradients at end points
+            zendpt = [zv[0], zv[-1]]
+            dydz   =  dspli_dz( zendpt )
+            imin = argmin(dydz)  # NB: opposite find_highest_gradient
+            return zendpt[imin], dydz[imin]
 
 
 
-## Find vertical integral for a set of vertical columns
-#  @param z      shape (npt,nz) : npt vertical columns of depths (ascending order), each with nz points corresponding to y
-#  @param y      shape (npt,nz) : npt vertical columns of scalar, each with nz points
-#  @param cellw  shape (npt,nz) : npt vertical columns of cell widths (ascending order), each with nz points corresponding to y
-#  @param blay   shape (npt,)   : highest wet point index in column; blay < 0 indicates a dry column
+## Find vertical integral for a vertical column
+#  @param zv      shape (nz,) : vertical column of depths (ascending order) with nz points
+#  @param yv      shape (nz,) : vertical column of scalar with nz values (at points zv)
+#  @param cwv                 : cell widths of vertical column (from surface and down)
+#  @param ib                  : highest wet point index in column; ib < 0 indicates a dry column
 #
 #  trapez summation, with constant extrapolation at end points (half of upper cell + lowest wet cell)
-def find_vertical_integrals(z, y, cellw, blay):
-    vintg = []
-    # ---- loop over all vertical columns ----
-    for zv,yv,cwv,ib in zip(z, y, cellw, blay):
-        if ib < 0:    # --- dry point
-            vintg.append( 0.0 )
-        elif ib == 0: # --- single layer situation: value * cell width
-            vintg.append( cwv[0]*yv[0] )
-        else:
-            trapez = 0.5*( yv[1:(ib+1)] + yv[0:ib] )*( zv[1:(ib+1)] - zv[0:ib] ) # trapez sum parts + extrapolation
-            intg   = 0.5*cw[0]*yv[0] + sum(trapez) + 0.5*cw[ib]*yv[ib] # trapez sum + tails
-            vintg.append( intg ) # layer width * value
-    # for zv,yv,cwv,ib
-    return array(vintg, float)
+def find_vertical_integral(zv, yv, cwv, ib):
+    if ib < 0:    # --- dry point
+        return 0.0
+    elif ib == 0: # --- single layer situation: value * cell width
+        return cwv[0]*yv[0] # layer width * value
+    else:
+        trapez = 0.5*( yv[1:(ib+1)] + yv[0:ib] )*( zv[1:(ib+1)] - zv[0:ib] ) # trapez sum parts + extrapolation
+        intg   = 0.5*cwv[0]*yv[0] + sum(trapez) + 0.5*cwv[ib]*yv[ib] # trapez sum + tails
+        return intg
+    
 
+## Evaluate water density for a set of npt vertical columns top-down (single column version)
+#  @param z       shape (mz,)     : layer center positions [m] of vertical column 
+#  @param s       shape (mz,)     : salinity [PSU] at z positions
+#  @param t       shape (mz,)     : temperature [Celcius]  at z positions
+#  @param patm    (optional) patm : atmospheric pressure [bar]
+#  @param maxiter (optional)      : iteration cap on pressure loop
+#  @param dpmax   (optional)      : max change in pressure [bar] in pressure loop
+#  @return rhow   shape (mz,)     : water density [kg/m3] corresponding to input at positions z
+#
+#  iterate column pressure to self consistency
+#  Water density and pressure are determined by two coupled, non-linear relations: 
+#          1) dp   = g rhow(p) dz
+#          2) rhow = rho_UNESCO(s,T,p)
+#  (rhow, p=pressure) are cell-centered and considered cell-wise constants and therefore
+#  eqs. 1,2 reads (iz = 0 .. mz-1)
+#          3)  p[iz]  = p[iz-1] + 0.5*g * dz(iz-1) * (rhow(iz)-rhow(iz-1))
+#          4)  rhow   = rho_UNESCO(s,T,p)
+#  3,4 are iterated to selfconsistency for each layer, after which it is solved 
+#  for next layer below, iz+1. The iterative loop usually converges to numerical 
+#  precision within 3-4 iteratative cycles of eqs 3,4
+def evaluate_water_density(z, s, t, patm = 1.01325, maxiter=10, dpmax=1e-20):
+      gfac   = 9.81/1.e5  # g * conversion from Pa to bar
+      mz    = len(z)
+      
+      dz    = z[1:] - z[:-1]  # spacing between cell centers in each column, counting from 1st-2nd layer
+      dz    = where(dz>0, dz, 0)  # in case z is not an increasing function for dry layers (it should not be decreasing)
+      s     = where(s>0,       s,   1e-10)  # avoid numerical exceptions at dry points at vector evaluation
+      t     = where(t>-273.16, t, -273.16)  # avoid numerical exceptions at dry points at vector evaluation
+      p     = patm*ones(len(z), float)  # pressure at points z
+      p_old = 1.0*p                     # convergence monitoring
+      for it in range(maxiter):
+            rhow   = rho_UNESCO(s,t,p)
+            p[0] = patm + gfac*z[0]*rhow[0] # at center point of first layer
+            for iz in range(1,mz):
+                  p[iz]  = p[iz-1] + 0.5 * gfac * dz[iz-1] * (rhow[iz]-rhow[iz-1])
+            # check convergence       
+            dp = amax(abs(p-p_old))
+            #print it, dp
+            if dp < dpmax:
+                  break
+            else:
+                  p_old = 1.0*p # force copy
+      return rhow
+            
 
-
-## Evaluate water density for a set of npt vertical columns top-down
+  
+## Evaluate water density for a set of npt vertical columns top-down (vectorized over columns)
 #  @param z       shape (npt,nz)  : npt vertical columns of depths [m] (ascending order), each with nz points corresponding to s,t
 #  @param s       shape (npt,nz)  : npt vertical columns of salinity [PSU], each with nz points
 #  @param t       shape (npt,nz)  : npt vertical columns of temperature [Celcius], each with nz points
@@ -285,7 +319,7 @@ def find_vertical_integrals(z, y, cellw, blay):
 #  3,4 are iterated to selfconsistency for each layer, after which it is solved 
 #  for next layer below, iz+1. The iterative loop usually converges to numerical 
 #  precision within 3-4 iteratative cycles of eqs 3,4
-def evaluate_water_density(z, s, t, patm = 1.01325, maxiter=10, dpmax=1e-20):
+def evaluate_water_density_vectorized(z, s, t, patm = 1.01325, maxiter=10, dpmax=1e-20):
       gfac   = 9.81/1.e5  # g * conversion from Pa to bar
       npt,nz = z.shape
       
@@ -308,7 +342,7 @@ def evaluate_water_density(z, s, t, patm = 1.01325, maxiter=10, dpmax=1e-20):
             else:
                   p_old = 1.0*p # force copy
       return rhow
-            
+
 
 
 ##  calculates the density of sea water at a given point using the UNESCO equation of state (from Per Berg, per@dmi.dk)
@@ -409,6 +443,6 @@ if __name__ == "__main__":
     cw = acc[1:]-acc[:-1]
     y  = 3 + 4*z
     #print find_maximum_value([z], [y], [len(z)-1])
-    print find_vertical_integrals([z], [y], [cw], [len(z)-1])
+    print find_vertical_integrals(z, y, cw, len(z)-1)
     zm = acc[-1]
     print 3*zm + 2*zm**2
