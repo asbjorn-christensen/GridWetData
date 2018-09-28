@@ -65,7 +65,7 @@ def find_maximum_value(z, y, blay, zstep=1.0, zdry=0.0, dryval=0.0):
             maxval.append(yy) # max end point
             zmax.append(zz)   # z for max end point
         elif ib == 2: # --- parabolic situation - max at bound or top
-            a,b,c,problem_solvable = fit_3pt_to_parabola(zv, yv)
+            a,b,c,problem_solvable = fit_3pt_to_parabola(zv[:3], yv[:3])
             # non singular situation + concave + interior max (rely on left-to-right evaluation)
             if problem_solvable and a < -1e-20 and (zv[0] < -b/2/a < zv[2]):
                 ztop = -b/2/a
@@ -92,7 +92,6 @@ def find_maximum_value(z, y, blay, zstep=1.0, zdry=0.0, dryval=0.0):
                 z_at_maxval = None
                 for z in roots:
                     value = spli(z)
-                    print z,value,d2spli_dz2(z)
                     if d2spli_dz2(z)<0 and value > best_maxval:
                         best_maxval = value
                         z_at_maxval = z
@@ -136,7 +135,7 @@ def find_highest_gradient(z, y, blay, zstep=1.0, zdry=0.0, graddry=0.0):
             gradmax.append((yv[1]-yv[0])/(zv[1]-zv[0]) ) # linear interpolation
             zmax.append(    0.5*(zv[0]+zv[1]) )          # midpoint
         elif ib == 2: # --- parabolic situation - max grad at upper/lower bound
-            a,b,c,problem_solvable = fit_3pt_to_parabola(zv, yv)
+            a,b,c,problem_solvable = fit_3pt_to_parabola(zv[:3], yv[:3])
             if problem_solvable: # non singular situation
                 dydz0 = 2*a*zv[0] + b
                 dydz2 = 2*a*zv[2] + b
@@ -201,7 +200,7 @@ def find_lowest_gradient(z, y, blay, zstep=1.0, zdry=0.0, graddry=0.0):
             gradmin.append((yv[1]-yv[0])/(zv[1]-zv[0]) ) # linear interpolation
             zmin.append(    0.5*(zv[0]+zv[1]) )          # midpoint
         elif ib == 2: # --- parabolic situation - min grad at upper/lower bound
-            a,b,c,problem_solvable = fit_3pt_to_parabola(zv, yv)
+            a,b,c,problem_solvable = fit_3pt_to_parabola(zv[:3], yv[:3])
             if problem_solvable: # non singular situation
                 dydz0 = 2*a*zv[0] + b
                 dydz2 = 2*a*zv[2] + b
@@ -238,6 +237,30 @@ def find_lowest_gradient(z, y, blay, zstep=1.0, zdry=0.0, graddry=0.0):
                 zmin.append(    zendpt[imin] )
     # for yv,zv,ib
     return array(zmin, float), array(gradmin, float)
+
+
+
+## Find vertical integral for a set of vertical columns
+#  @param z      shape (npt,nz) : npt vertical columns of depths (ascending order), each with nz points corresponding to y
+#  @param y      shape (npt,nz) : npt vertical columns of scalar, each with nz points
+#  @param cellw  shape (npt,nz) : npt vertical columns of cell widths (ascending order), each with nz points corresponding to y
+#  @param blay   shape (npt,)   : highest wet point index in column; blay < 0 indicates a dry column
+#
+#  trapez summation, with constant extrapolation at end points (half of upper cell + lowest wet cell)
+def find_vertical_integrals(z, y, cellw, blay):
+    vintg = []
+    # ---- loop over all vertical columns ----
+    for zv,yv,cwv,ib in zip(z, y, cellw, blay):
+        if ib < 0:    # --- dry point
+            vintg.append( 0.0 )
+        elif ib == 0: # --- single layer situation: value * cell width
+            vintg.append( cwv[0]*yv[0] )
+        else:
+            trapez = 0.5*( yv[1:(ib+1)] + yv[0:ib] )*( zv[1:(ib+1)] - zv[0:ib] ) # trapez sum parts + extrapolation
+            intg   = 0.5*cw[0]*yv[0] + sum(trapez) + 0.5*cw[ib]*yv[ib] # trapez sum + tails
+            vintg.append( intg ) # layer width * value
+    # for zv,yv,cwv,ib
+    return array(vintg, float)
 
 
 
@@ -380,6 +403,12 @@ if __name__ == "__main__":
     #rhow = evaluate_water_density(array([z]), array([s]), array([t]))
     #for (zz,dens) in zip(z,rhow[0]):
     #    print zz,dens
-    y = z*z*exp(-z)
-    print find_maximum_value([z], [y], [len(z)-1])
-    
+    #y = z*z*exp(-z)
+    acc = arange(100)**1.4
+    z  = 0.5*(acc[1:]+acc[:-1])
+    cw = acc[1:]-acc[:-1]
+    y  = 3 + 4*z
+    #print find_maximum_value([z], [y], [len(z)-1])
+    print find_vertical_integrals([z], [y], [cw], [len(z)-1])
+    zm = acc[-1]
+    print 3*zm + 2*zm**2
