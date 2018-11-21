@@ -9,6 +9,54 @@ from GridWetData.grid_data import *
 _default_grid_tag = "ns"   # spatial region / resolution tag associated with data
 _verbose          = False  # control debugging output
 
+
+
+#  ====================================================================================
+#  Narrow sub classes to GridData_3D for stepping through staggered data
+#  Experimental solution that may be liftet up to base folder at some point
+
+#  ====================================================================================
+class GridData_3D_EastStaggerd(GridData_3D):
+    #  -----------------------------------------------------
+    ## constructor
+    #  Handle data staggered on Eastern side of each cell
+    #  @param self       The object pointer
+    #  @param grid       grid object
+    #  @param inputarg   filename / 3D array
+    #  @param padval     pad value to define Western edge (optional)
+    def __init__(self, grid, inputarg, padval=0.0):
+        if isinstance(inputarg, basestring): # assume inputarg is a file name    
+            data      = grid.load_data_frame(inputarg)
+            self.file_name = inputarg
+        else:  # do not set file_name attribute
+            data  = inputarg # assume it is a suitable data instance
+
+        shifted = zeros(data.shape, float)
+        shifted[1:,:,:] = 0.5*(data[:-1,:,:] + data[1:,:,:]) # shift data to center point
+        shifted[0, :,:] = 0.5*(padval        + data[ 1,:,:]) # use pad value to extrapolate to Western edge
+        GridData_3D.__init__(self, grid, shifted)
+
+class GridData_3D_SouthStaggerd(GridData_3D):
+    #  -----------------------------------------------------
+    ## constructor
+    #  Handle data staggered on Southern side of each cell
+    #  @param self       The object pointer
+    #  @param grid       grid object
+    #  @param inputarg   filename / 3D array
+    #  @param padval     pad value to define Northern edge (optional)
+    def __init__(self, grid, inputarg, padval=0.0):
+        if isinstance(inputarg, basestring): # assume inputarg is a file name    
+            data      = grid.load_data_frame(inputarg)
+            self.file_name = inputarg
+        else:  # do not set file_name attribute
+            data  = inputarg # assume it is a suitable data instance
+    
+        shifted = zeros(data.shape, float)
+        shifted[:,:-1,:] = 0.5*(data[:,:-1,:] + data[:,1:,:])  # shift data to center point
+        shifted[:,-1, :] = 0.5*(padval        + data[:,-1,:])  # use pad value to extrapolate to Northern edge
+        GridData_3D.__init__(self, grid, shifted)
+
+
 #  ====================================================================================
 ## Super class for interpolation in space+time by first interpolating space, then time
 #  specific for 3D + interaction with DataManager
@@ -159,8 +207,6 @@ class HorizontalCurrentData_3DwithTime:
         else:
             return array([ures,vres])
     __call__ = interpolate
-
-    
 
 
 
