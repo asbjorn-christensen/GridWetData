@@ -192,18 +192,20 @@ class DataManager:
     ## Generator function for looping over data sets in inventory
     #  Staggering not supported (ignored)
     #  Return (time, griddata) pair where time is a date_time instance and griddata is a griddata_class instance
+    #  No iterator yield, if self.datasets does not have proptag and gridtag (for that proptag)
     #  @param self              The object pointer
     #  @param griddata_class    spectator class to be applied for grid data - must be instantiated as a GridData_3D
     #  @param proptag           tag for data property to be looped over
     #  @param gridtag           tag for grid to be applied 
     def loop_over(self, griddata_class, proptag, gridtag):
         if _verbose: print "load_frame: %s" % fname_data
-        for (thash, fname, dtime) in zip(*self.datasets[proptag][gridtag]):    
-            izf     = self.datasets["z"][gridtag][2].index(dtime) # pick corresponding sea level elevation
-            zfname  = self.datasets["z"][gridtag][1][izf]         # 
-            newgrid = copy.copy(self.grids[gridtag])              # shallow copy of ancestor grid
-            newgrid.update_sea_level(zfname)                
-            yield dtime, griddata_class(newgrid, fname)
+        if self.datasets.has_key(proptag) and self.datasets[proptag].has_key(gridtag):  # left to right evaluation
+            for (thash, fname, dtime) in zip(*self.datasets[proptag][gridtag]):    
+                izf     = self.datasets["z"][gridtag][2].index(dtime) # pick corresponding sea level elevation
+                zfname  = self.datasets["z"][gridtag][1][izf]         # 
+                newgrid = copy.copy(self.grids[gridtag])              # shallow copy of ancestor grid
+                newgrid.update_sea_level(zfname)                
+                yield dtime, griddata_class(newgrid, fname)
         
         
     # ---------------------------------------------------------------

@@ -15,10 +15,13 @@
 #  wet point map and static cell thicknesses (dry cells are given thickness = -1)
 #  maintain DMIs original wet point format, where first element is a pad value for dry points
 #
-#  make_grid_desc.py ns_grid.sum tmp/ns_grid_depth_v3 ns_grid.nc
+#  Based on the netCDF4 API
+#
+#  make_grid_desc.py   ../Grids/ns_grid.sum    /home/data/GUDP-VIND_test/VINDdata/setup/ns_grid_depth_v5   ns_grid.nc
+#
 #####################################################################################
-from numpy    import *
-from Scientific.IO.NetCDF import *
+from   numpy    import *
+import netCDF4  as netcdf 
 
 import sys
 import exceptions
@@ -91,7 +94,7 @@ for ix in range(nx):
 # ------------ dump to netCDF ------------
 #
 
-ncfile    = NetCDFFile(sys.argv[3], 'w')
+ncfile    = netcdf.Dataset(sys.argv[3], 'w')               # netCDF4 constructor
 
 # --- define mode ---
 
@@ -135,8 +138,8 @@ ncfile.variables["lon0"].assignValue(lon0)
 ncfile.variables["lat0"].assignValue(lat0)
 ncfile.variables["dlon"].assignValue(dlon)
 ncfile.variables["dlat"].assignValue(dlat)
-ncfile.variables["map3d_to_1d"].assignValue(map3d_to_1d)
-ncfile.variables["mapsurf_to_1d"].assignValue(map3d_to_1d[:,:,0])
-ncfile.variables["cell_thickness"].assignValue(cell_thickness)
+ncfile.variables["map3d_to_1d"][:]    = map3d_to_1d            # netCDF4 array assignment
+ncfile.variables["mapsurf_to_1d"][:]  = map3d_to_1d[:,:,0]     # netCDF4 array assignment
+ncfile.variables["cell_thickness"][:] = cell_thickness         # netCDF4 array assignment
 ncfile.close()
  
