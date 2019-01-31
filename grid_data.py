@@ -258,6 +258,14 @@ class GridData_3D(GridData):
         grid, data = self.grid.get_vertical_average(self.data)
         return GridData_2D(grid, data)
 
+    #  -------------------------------------------------------
+    ## Generate vertical max of data at native grid resolution
+    #  @param  self The object pointer.
+    #  @return GridData_2D instance of vertical max layer
+    #
+    def get_vertical_max(self):
+        grid, data = self.grid.get_vertical_max(self.data)
+        return GridData_2D(grid, data)
 
 # ==============================================================================
 ## Sub class of GridData for 2-dimensional situations (currently void)

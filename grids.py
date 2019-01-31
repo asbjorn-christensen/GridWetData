@@ -781,11 +781,31 @@ class LonLatZGrid(LonLatGrid):
         for ix in range(self.nx):
             for iy in range(self.ny):
                 if self.wetmask[ix,iy,0]>0:
-                    w  = self.cellw[ix, iy, :] # weight for this column
-                    data2D[ix,iy] = sum(arr3D[ix, iy, :] * w)/sum(w)
+                    blayp1 = self.bottom_layer[ix,iy]+1
+                    w  = self.cellw[ix, iy, :blayp1] # weight for this column
+                    data2D[ix,iy] = sum(arr3D[ix, iy, :blayp1] * w)/sum(w)
         grid2D = self.export_horizontal_grid()
         return grid2D, data2D
-
+    #  -------------------------------------------------------
+    ## Generate vertical max of data at native grid resolution (no vertical interpolation) 
+    #  projection may be speeded up avoiding explicit loops later (e.g. a dynamic projection mask + axis sum)
+    #  Apply dynamic cell thickness cellw as weighting factor for avarage
+    #  @param  self The object pointer.
+    #  @param  arr3D is the 3D array to be projected
+    #  @param  padval is used for dry points
+    #  @return LonLatGrid, array(nx,ny)
+    #
+    def get_vertical_max(self, arr3D, padval = 0.0):
+        data2D = padval*ones((self.nx, self.ny), float)
+        # transfer data at wet points
+        for ix in range(self.nx):
+            for iy in range(self.ny):
+                if self.wetmask[ix,iy,0]>0:
+                    blayp1 = self.bottom_layer[ix,iy]+1
+                    data2D[ix,iy] = max(arr3D[ix, iy, :blayp1])
+        grid2D = self.export_horizontal_grid()
+        return grid2D, data2D    
+    
     
     def write_data_as_netCDF(self, file, data, **kwargs):
         raise exceptions.NotImplementedError("to be implemented for class LonLatZGrid")
