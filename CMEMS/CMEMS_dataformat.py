@@ -119,7 +119,7 @@ class CMEMS_DataSet:
             raise exceptions.ValueError(msg)
         #
         dtsec0 = int(0.5 + (toff - _time_offset).total_seconds()) # seconds from internal offset to data time offset 
-        t = asarray(self.ncf.variables["time"][:], int64)         # int32 is not sufficient when converted to seconds
+        t      = asarray(self.ncf.variables["time"][:], float64)  # recast to avoid overflow of tsca*t, when t loaded as int32
         self.timehash = asarray(0.5 + tsca*t + dtsec0, int64)     # round to long int64 vector
         #
         
