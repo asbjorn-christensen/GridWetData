@@ -22,13 +22,12 @@ class CMEMS_Grid_2D(LonLatGrid):
     #  @param fname   file name of an CMEMS data netcdf file (contains grid info)
     #
     def __init__(self, fname):
-        ncfile     = CMEMS_dataformat.CMEMS_DataSet(fname)
+        ncfile     = CMEMS_dataformat.CMEMS_DataSet(fname)  # includes invoking _extract_2D_grid_params
         ## file name corresponding to loaded data set
         self.fname = fname
-        nx, ny, lon0, lat0, dlon, dlat = ncfile._extract_2D_grid_params()
-        ncfile.close()
         #
-        LonLatGrid.__init__(self,  nx, ny, lon0, lat0, dlon, dlat)
+        LonLatGrid.__init__(self, ncfile.nx, ncfile.ny, ncfile.lon0, ncfile.lat0, ncfile.dlon, ncfile.dlat)
+        ncfile.close()
         #
         
 
@@ -48,18 +47,16 @@ class CMEMS_Grid_3D(LonLatZGrid):
     #  @param diagvar Name of diagnostic variable, to deduce topography from (optional), otherwise apply resolve_topo_varnames_3D
     #
     def __init__(self, fname, diagvar=None):
-        ncfile     = CMEMS_dataformat.CMEMS_DataSet(fname)
+        ncfile     = CMEMS_dataformat.CMEMS_DataSet(fname)   # invokes _extract_2D_grid_params
         ## file name corresponding to loaded data set
         self.fname = fname
-        nx, ny, lon0, lat0, dlon, dlat = ncfile._extract_2D_grid_params()
         if diagvar is None:
-            cellw0  = ncfile._extract_3D_cellw0(self.resolve_topo_varnames_3D)
+            cellw0  = ncfile._extract_3D_cellw0(self.resolve_topo_varnames_3D) 
         else:
             cellw0  = ncfile._extract_3D_cellw0(diagvar)
-        ncfile.close()
         #
-        LonLatZGrid.__init__(self,  nx, ny, lon0, lat0, dlon, dlat, cellw0)
-    
+        LonLatZGrid.__init__(self, ncfile.nx, ncfile.ny, ncfile.lon0, ncfile.lat0, ncfile.dlon, ncfile.dlat, cellw0)    
+        ncfile.close()
     
         
 

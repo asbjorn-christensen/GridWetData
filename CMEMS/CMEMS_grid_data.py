@@ -268,7 +268,7 @@ class CMEMS_GridData_2DwithTime(CMEMS_GridData_withTime):
         self.fname  = fname
         self.ncfdata = CMEMS_dataformat.CMEMS_DataSet(fname)
         if grid is None:
-            self.grid    = CMEMS_Grid_2D(fname, varname) 
+            self.grid    = CMEMS_Grid_2D(fname) 
         else:
             self.grid    = grid   # reference provided instance
         # resolve property attribute prop

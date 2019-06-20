@@ -12,12 +12,20 @@ import re
 #  a separate grid descriptor, but extracts grid information from any data file
 #  Sub classes of CMEMS_Grids provide lookup variable name tables, corresponding to
 #  specific data sets 
-
+#
+#  horizontal axes must be called either ('lon' and 'lat') OR ('longitude' and 'latitude')
+#  not a hybrid combination; dimension and axis name must be identical
+#  Data set contains only one set of horizontal axes, which are considered singletons
+#
+#  numpy.flip requires numpy version >= 1.12
+################################################################################
+_lon_names = ('lon', 'longitude')
+_lat_names = ('lat', 'latitude')
 
 _verbose = False
 
     
-_time_offset = datetime(2014,1,1)
+_time_offset = datetime(2014,1,1)  # module internal - not related to actual offset of time axis
 
 # for parsing the time:units attribute
 
@@ -71,7 +79,8 @@ class CMEMS_DataSet:
     def __init__(self, *args, **kwargs):
         self.ncf = netcdf.Dataset(*args, **kwargs)
         self._update_time_hash()
-
+        self._extract_2D_grid_params()  # make sure flip_lon, flip_lat attrs are set
+        
     def close(self):
         self.ncf.close()
 
@@ -80,14 +89,15 @@ class CMEMS_DataSet:
         
     def _update_time_hash(self):
         # -----------------------------------------------------
-        # Parse time:units attribute and create a time hash : _timehash 
+        # Parse time:units attribute and create a time hash : timehash 
         # based on the variable time for data frames in the set
-        # _timehash has units seconds since _time_offset (module constant)
+        # timehash has units seconds since _time_offset (module constant)
         # 
         # Time designation is slightly different bewteen data products; examples :
-        #   MetO-NWS-BIO-dm-DOXY.h:		   time:units = "seconds since 2017-06-27 00:00:00" ;
-        #   MetO-NWS-PHYS-hi-TEM.h:	  	   time:units = "seconds since 2015-07-03 00:00:00" ;
+        #   MetO-NWS-BIO-dm-DOXY.h:		    time:units = "seconds since 2017-06-27 00:00:00" ;
+        #   MetO-NWS-PHYS-hi-TEM.h:	  	    time:units = "seconds since 2015-07-03 00:00:00" ;
         #   MetO-NWS-REAN-PHYS-daily-TEM.h: time:units = "days since 1985-01-01" ;
+        #   wave_BS_2010_1h.h:              time:units = "hours since 1900-01-01 00:00:00.0" 
         #
         # It may be considered, if time frames with day annotation should be assigned to
         # noon that day, rather than mid night
@@ -108,10 +118,11 @@ class CMEMS_DataSet:
             msg  = "In data set %s: attribute time:units has unknown format: %s" % (self.ncf.file, unitattr)
             raise exceptions.ValueError(msg)
         #
-        dtsec0 = int(0.5 + (toff - _time_offset).total_seconds())
-        t = self.ncf.variables["time"][:]
-        self.timehash = asarray(0.5 + tsca*t + dtsec0, int)   # round to int vector
-
+        dtsec0 = int(0.5 + (toff - _time_offset).total_seconds()) # seconds from internal offset to data time offset 
+        t = asarray(self.ncf.variables["time"][:], int64)         # int32 is not sufficient when converted to seconds
+        self.timehash = asarray(0.5 + tsca*t + dtsec0, int64)     # round to long int64 vector
+        #
+        
             
     def get_time_interpolation_bracket(self, when):
         # -----------------------------------------------------
@@ -140,20 +151,44 @@ class CMEMS_DataSet:
         
     def _extract_2D_grid_params(self):
         #  -----------------------------------------------------
-        ## Extract basic 2D descriptors from open netCDF file ncf
-        #
+        ## Extract basic 2D descriptors from open netCDF file ncf (setting them as attributes on self)
+        #  
+        #  capture and flag if lon/lat axes in data are reversed (flip_lon, flip_lat)
         #  @param self       open netCDF file object
-        #  @return           nx, ny, lon0, lat0, dlon, dlat (basic grid descriptors)
+        #  @return           None
         #  -----------------------------------------------------
-        nx         = self.ncf.dimensions["lon"].size # integer 
-        ny         = self.ncf.dimensions["lat"].size # integer 
-        lonvec     = self.ncf.variables["lon"][:]
-        latvec     = self.ncf.variables["lat"][:]
-        dlon       = lonvec[1]-lonvec[0]
-        dlat       = latvec[1]-latvec[0]
-        assert dlon > 0
-        assert dlat > 0
-        return nx, ny, lonvec[0], latvec[0], dlon, dlat
+        for axname in _lon_names:
+            if self.ncf.dimensions.has_key(axname):
+                self.nx         = self.ncf.dimensions[axname].size # integer
+                lonvec     = self.ncf.variables[axname][:]    # dimension and axis name must be identical
+                if lonvec[1] > lonvec[0]:                     # normal axis orientation
+                    self.dlon       = lonvec[1]-lonvec[0]
+                    self.lon0       = lonvec[0]
+                    self.flip_lon   = False
+                else:                                         # reversed axis orientation
+                    self.dlon       = lonvec[0]-lonvec[1]
+                    self.lon0       = lonvec[-1]
+                    self.flip_lon   = True
+                break
+        else:
+            raise exceptions.InputError("lon axis not recognized")
+        #
+        for axname in _lat_names:
+            if self.ncf.dimensions.has_key(axname):
+                self.ny         = self.ncf.dimensions[axname].size # integer
+                latvec     = self.ncf.variables[axname][:]    # dimension and axis name must be identical
+                if latvec[1] > latvec[0]:                     # normal axis orientation
+                    self.dlat       = latvec[1]-latvec[0]
+                    self.lat0       = latvec[0]
+                    self.flip_lat   = False
+                else:                                         # reversed axis orientation
+                    self.dlat       = latvec[0]-latvec[1]
+                    self.lat0       = latvec[-1]
+                    self.flip_lat   = True
+                break
+        else:
+            raise exceptions.InputError("lat axis not recognized")
+        #
 
         
     def _extract_3D_cellw0(self, diagvarname):
@@ -171,8 +206,7 @@ class CMEMS_DataSet:
         #  Data variables are apparently loaded as masked arrays by
         #  the netcdf4 API. Therefore detect topography by testing mask==True (dry)
         #  ------------------------------------------------------------------------
-        nx, ny, lon0, lat0, dlon, dlat = self._extract_2D_grid_params()
-        nz         = self.ncf.dimensions["depth"].size # integer
+        self.nz  = self.ncf.dimensions["depth"].size # integer
         #
         # ------ identify topography probing variable ------
         #
@@ -193,7 +227,7 @@ class CMEMS_DataSet:
         var           = swapaxes(var, 0, 2)          # now shape = (lon, lat, depth)
         #
         ccz           = self.ncf.variables["depth"][:]    # layer centers
-        cellw0        = zeros((nx,ny,nz), float)
+        cellw0        = zeros((self.nx, self.ny, self.nz), float)
         cellw0[:,:,:] = _cc2lw(ccz)                  # convert cell center positions to layer widths
         cellw0        = where(var.mask, -1, cellw0)  # dry cells assigned -1
         return cellw0
@@ -202,16 +236,35 @@ class CMEMS_DataSet:
         ## Extract frame itime of variable vname and swap axes, corresponding to GWD data layout
         #  3D: (time, depth, lat, lon) ->  (lon, lat, depth)
         #  2D: (time, lat, lon)        ->  (lon, lat)
+        #  netcdf4 module internally handles integer affine decompression, if data stored as integers
+        # ------------------------------------------------------------------------------------------
         ncvar   = self.ncf.variables[vname]
         maskvar = ncvar[itime,:]
         var     = maskvar.data          # strip mask
-        if ncvar.dimensions == ('time', 'depth', 'lat', 'lon'): # 3D case
+        for ix in range(self.nx):
+            for iy in range(self.ny):
+                if maskvar.mask[self.ny-iy-1,ix]:
+                    print ix,iy,777
+        stop
+        #
+        if  (len(ncvar.dimensions) == 4) and \
+            (ncvar.dimensions[2] in _lat_names) and \
+            (ncvar.dimensions[3] in _lon_names): # 3D case
             var   = swapaxes(var, 0, 2)                         # cast to 3D GWD layout
-        elif ncvar.dimensions == ('time', 'lat', 'lon'):        # 2D case
+        elif  (len(ncvar.dimensions) == 3) and \
+              (ncvar.dimensions[1] in _lat_names) and \
+              (ncvar.dimensions[2] in _lon_names):  # 2D case
             var   = swapaxes(var, 0, 1)                         # cast to 2D GWD layout
         else:
             msg = "get_time_frame: unexpected axes / axes ordering : %s" % str(ncvar.dimensions)
             raise exception.ValueError(msg)
+        # --- flip axes, if required, to obtain standard layout ---
+        #
+        if self.flip_lon:
+            var = flip(var, axis=0)  # flip requires numpy >= 1.12
+        if self.flip_lat:
+            var = flip(var, axis=1)  # flip requires numpy >= 1.12
+        #
         if _verbose:
             print "get_time_frame: exporting frame %d" % itime
         return var            
@@ -237,6 +290,12 @@ class CMEMS_DataSet:
         else:
             msg = "get_wetmask: unexpected axes / axes ordering : %s" % str(ncvar.dimensions)
             raise exception.ValueError(msg)
+        # --- flip axes, if required, to obtain standard layout ---
+        if self.flip_lon:
+            wetmask = flip(wetmask, axis=0)  # flip requires numpy >= 1.12
+        if self.flip_lat:
+            wetmask = flip(wetmask, axis=1)  # flip requires numpy >= 1.12
+        #
         return wetmask
         
 #################### self test #########################
