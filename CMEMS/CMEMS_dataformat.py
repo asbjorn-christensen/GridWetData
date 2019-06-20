@@ -241,12 +241,6 @@ class CMEMS_DataSet:
         ncvar   = self.ncf.variables[vname]
         maskvar = ncvar[itime,:]
         var     = maskvar.data          # strip mask
-        for ix in range(self.nx):
-            for iy in range(self.ny):
-                if maskvar.mask[self.ny-iy-1,ix]:
-                    print ix,iy,777
-        stop
-        #
         if  (len(ncvar.dimensions) == 4) and \
             (ncvar.dimensions[2] in _lat_names) and \
             (ncvar.dimensions[3] in _lon_names): # 3D case
