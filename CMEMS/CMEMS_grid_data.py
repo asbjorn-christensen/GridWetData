@@ -221,10 +221,10 @@ class CMEMS_GridVector_3DwithTime(CMEMS_GridData_withTime):
             iam = iam + "right bracket : w=%f file=%s"   % (self.w1, self.gdata1.file_name)
         return iam
 
-    ## Trigger load of a specific time frame as GridData_3D instance and tag instance with frame number
+    ## Trigger load of a specific time frame as GridVector_3D instance and tag instance with frame number
     #  @param self       The object pointer
     #  @param ifr        time frame to load
-    #  @return           GridData_3D instance with loaded data, with attributes time_frame == ifr and
+    #  @return           GridVector_3D instance with loaded data, with attributes time_frame == ifr and
     #                    time corresponding to datetime of time frame ifr
     #
     def load_frame(self, ifr):
@@ -247,9 +247,91 @@ class CMEMS_GridVector_3DwithTime(CMEMS_GridData_withTime):
     #  since all variables have same time dimension, just probe first variable 
     def get_number_of_frames(self): 
         return self.ncfdata.get_number_of_frames(self.prop[0]) # probe first variable 
-        
-# class CMEMS_GridVector_2DwithTime(NWS_GridData_withTime):  deferred until needed
 
+
+
+
+class CMEMS_GridVector_2DwithTime(CMEMS_GridData_withTime):
+    #  -----------------------------------------------------
+    ## constructor
+    #  Data is first loaded at interpolation time, when time argument is available
+    #  spectator class to view a netcdf data set with time dimension
+    #  All components of the vector must be on same grid
+    #  @param self       The object pointer
+    #  @param fname      netcdf data set file name  
+    #  @param varname    variable names to look for (vector of strings) (optional)
+    #                    If absent, class attributre prop must be set
+    #                    No scanning for known variable names
+    #                    for each token "zero_data", a zero-valued field is inserted in that position
+    #  @param gridclass  Grid instance (optional). Default: instantiate a CMEMS_Grid
+    def __init__(self, fname, varname=None, grid=None):
+        self.fname   = fname
+        self.ncfdata = CMEMS_dataformat.CMEMS_DataSet(fname)
+        if grid is None:
+            self.grid    = CMEMS_Grid_2D(fname)  # All components of the vector must be on same grid
+        else:
+            self.grid    = grid   # reference provided instance
+        # resolve property attribute prop
+        if varname is None:
+            if not hasattr(self, "prop"):
+                msg  = "Unable to identify which variables should be loaded from data set %s" % fname
+                raise exceptions.ValueError(msg)
+        else: # an explicit varname has been provided
+            self.prop = varname
+        for vnam in self.prop: # check solicited data is present
+            assert self.ncfdata.has_variable(vnam) 
+            
+        ## datetime instance corresponding to current cache content (None for empty cache)
+        self.when_last = None # empty interpolation cache
+        
+        
+    ## --------------------------------------------------------------------
+    ## Generate a informative string representation of object
+    #  @param self The object pointer
+    #  @return string representation of instance
+    #
+    def __str__(self):
+        iam = "CMEMS_GridVector_2DwithTime instance for propa=%s\n" % "".join(self.prop)
+        if self.when_last is None:
+            iam = iam + "cache empty"
+        else:
+            iam = iam + "cache loaded for t=%s\n" % str(self.when_last)
+            iam = iam + "left  bracket : w=%f file=%s\n" % (self.w0, self.gdata0.file_name)
+            iam = iam + "right bracket : w=%f file=%s"   % (self.w1, self.gdata1.file_name)
+        return iam
+
+    ## Trigger load of a specific time frame as GridVector_2D instance and tag instance with frame number
+    #  @param self       The object pointer
+    #  @param ifr        time frame to load
+    #  @return           GridVector_2D instance with loaded data, with attributes time_frame == ifr and
+    #                    time corresponding to datetime of time frame ifr
+    #
+    def load_frame(self, ifr):
+        if _verbose: print "load_frame: loading frame %d" % ifr
+        # --- compose data in vector according to prop as a plain list
+        data = []
+        for prop in self.prop:
+            if prop is "zero_data": # allow to e.g. uprank a horizontal field to 2D
+                data.append(zeros(self.grid.nx, self.grid.ny, self.grid.nz), float)  # grid is Grid_2D
+            else:
+                data.append(self.ncfdata.get_time_frame(prop, ifr))
+        g2D  = GridVector_2D(self.grid, data) # do not copy grid, which is static
+        g2D.time_frame = ifr
+        g2D.time       = self.ncfdata.get_time(ifr)
+        return g2D
+
+    ## Inquire number of time frames in current data set for this variable
+    #  @param self       The object pointer
+    #
+    #  since all variables have same time dimension, just probe first variable 
+    def get_number_of_frames(self): 
+        return self.ncfdata.get_number_of_frames(self.prop[0]) # probe first variable 
+
+
+    
+
+
+    
 #  ====================================================================================
 ## Super class for interpolation of 2D data in space+time by first interpolating space, then time
 #  
