@@ -65,8 +65,9 @@ class AboveSeaSurface(TopographicalViolation): pass
 ## Horizontal grid regulary spaced in lon-lat super class
 #
 # Wet/dry awareness: the horizontal grid may OPTIONALLY have an array wetmask[ix,iy], which tells
-# whether the area (x,y) with grid coordinates [ix+/-0.5, iy +/-0.5] is wet; in 3D cases, LonLatZGrid
-# manages the wet/dry awareness
+# whether the area (x,y) with grid coordinates [ix+/-0.5, iy +/-0.5] is wet (or more generally
+# a valid data point that can be used for interpolation) 
+# In 3D cases, LonLatZGrid manages the wet/dry awareness
 # grid coordinates are vertex coordinates with vertices at integers >= 0
 # (x,y) = (0,0) corresponds to (lon0, lat0)
 # Coordinate transformations:
@@ -207,14 +208,17 @@ class LonLatGrid:
     def interpolate_data(self, arr2D, pos, deriv=0):
         ix,iy,ixp1,iyp1,sx,sy = self.get_vertex_indices(pos)
         res = self.interpolate_data_from_grid_coordinates(arr2D, ix,iy,ixp1,iyp1,sx,sy, deriv)
-        if deriv == 1:  # transform from (sx,sy) derivative to (lamdba,phi) derivative
+        if res is None:
+            return None # invalid data point, no interpolation
+        elif deriv == 1:  # transform from (sx,sy) derivative to (lamdba,phi) derivative
             res /= array([self.dlon, self.dlat])
         return res
 
 
     # -----------------------------------------------------------------------
-    ## Trilinear unconditional interpolation between corners of field arr2D sampling f(lam,phi)
-    #  Interpolation is unconditional since LonLatGrid is not aware of wet/dry conditions
+    ## Trilinear interpolation between corners of field arr2D sampling f(lam,phi)
+    #  If self has no attribute wetmask, interpolation is unconditional (i.e. all point on grid assumed valid)
+    #  otherwise only points with self.wetmask == 1 is included
     #  It is assumed that (ix,iy,ixp1,iyp1) corresponds to referencable vertices in arr2D (not checked)
     #  At the interior of the grid, ixp1 = ix+1 and iyp1 = iy+1
     # @param self The object pointer
@@ -227,27 +231,57 @@ class LonLatGrid:
     # @return data interpolated at (ix,iy,ixp1,iyp1,sx,sy)
     # 
     def interpolate_data_from_grid_coordinates(self, arr2D, ix,iy, ixp1,iyp1, sx,sy, deriv=0):
-        if deriv == 0:
-            f =  arr2D[ix,  iy]   * (1-sx) * (1-sy)   
-            f += arr2D[ixp1,iy]   *   sx   * (1-sy)
-            f += arr2D[ix,  iyp1] * (1-sx) *   sy
-            f += arr2D[ixp1,iyp1] *   sx   *   sy
-            return f
-        elif deriv == 1: 
-            # --- sx derivative 
-            df_dsx  = arr2D[ix,  iy]   * (-(1-sy))  
-            df_dsx += arr2D[ixp1,iy]   * (1-sy)
-            df_dsx += arr2D[ix,  iyp1] * (-sy)
-            df_dsx += arr2D[ixp1,iyp1] *  sy 
-            # --- sy derivative 
-            df_dsy  = arr2D[ix,  iy]   * (-(1-sx))   
-            df_dsy += arr2D[ixp1,iy]   * (-sx) 
-            df_dsy += arr2D[ix,  iyp1] * (1-sx) 
-            df_dsy += arr2D[ixp1,iyp1] *  sx   
-            return array([df_dsx, df_dsy], float)
-        else:
-            print "interpolate_2Ddata: unknown deriv argument value", deriv
-            raise ValueError
+        if hasattr(self, "wetmask"): # conditional interpolation (depending on wetmask)
+            wsum = 0
+            f    = 0
+            for (jx,wx) in ((ix, 1-sx), (ixp1, sx)):
+                for (jy,wy) in ((iy, 1-sy), (iyp1, sy)):
+                    w     = self.wetmask[jx,jy] * wx * wy
+                    wsum += w
+                    f    += arr2D[jx,jy]*w
+            if wsum < 1e-20:
+                bad_point = "ix,iy = %d %d sx,sy = %f %f" % (ix,iy, sx,sy)
+                raise exceptions.ValueError("rank deficit interpolation at " + bad_point)
+            #  
+            if deriv == 0:
+                return f/wsum
+            elif deriv == 1: # evaluate (d/dsx, d/dsy) (f/wsum)
+                dwsum_dsx = 0
+                dwsum_dsy = 0
+                df_dsx    = 0
+                df_dsy    = 0
+                for (jx,wx,dwx) in ((ix, 1-sx, -1), (ixp1, sx, 1)):
+                    for (jy,wy,dwy) in ((iy, 1-sy, -1), (iyp1, sy, 1)):
+                        dw_dsx = self.wetmask[jx,jy] * dwx * wy
+                        dw_dsy = self.wetmask[jx,jy] *  wx * dwy
+                        dwsum_dsx += dw_dsx 
+                        dwsum_dsy += dw_dsy
+                        df_dsx    += arr2D[jx,jy]*dw_dsx
+                        df_dsy    += arr2D[jx,jy]*dw_dsy
+                return array([df_dsx*wsum - f*dwsum_dsx,  
+                              df_dsy*wsum - f*dwsum_dsy])/wsum**2
+        else: # unconditional interpolation, corresponding to wetmask=1
+            if deriv == 0:
+                f =  arr2D[ix,  iy]   * (1-sx) * (1-sy)   
+                f += arr2D[ixp1,iy]   *   sx   * (1-sy)
+                f += arr2D[ix,  iyp1] * (1-sx) *   sy
+                f += arr2D[ixp1,iyp1] *   sx   *   sy
+                return f
+            elif deriv == 1: 
+                # --- sx derivative 
+                df_dsx  = arr2D[ix,  iy]   * (-(1-sy))  
+                df_dsx += arr2D[ixp1,iy]   * (1-sy)
+                df_dsx += arr2D[ix,  iyp1] * (-sy)
+                df_dsx += arr2D[ixp1,iyp1] *  sy 
+                # --- sy derivative 
+                df_dsy  = arr2D[ix,  iy]   * (-(1-sx))   
+                df_dsy += arr2D[ixp1,iy]   * (-sx) 
+                df_dsy += arr2D[ix,  iyp1] * (1-sx) 
+                df_dsy += arr2D[ixp1,iyp1] *  sx   
+                return array([df_dsx, df_dsy], float)
+            else:
+                print "interpolate_2Ddata: unknown deriv argument value", deriv
+                raise ValueError
 
     ## provide x,y mesh for the grid:
     # matplotlib / matlab compartability function
