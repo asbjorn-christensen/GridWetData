@@ -646,7 +646,7 @@ class LonLatZGrid(LonLatGrid):
             if depth>cwd:
                 raise BelowSeaBed(str(pos))
             else:
-                sz = (depth-ccd)/cwd # assign a well-def value
+                sz = 0.0 # assign a well-def value
         return ix,iy,iz,ixp1, iyp1,izp1, sx,sy,sz
            
     # ---------------------------------------------------------------------------------
