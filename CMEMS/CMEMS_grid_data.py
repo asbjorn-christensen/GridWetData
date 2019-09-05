@@ -268,7 +268,7 @@ class CMEMS_GridVector_2DwithTime(CMEMS_GridData_withTime):
         self.fname   = fname
         self.ncfdata = CMEMS_dataformat.CMEMS_DataSet(fname)
         if grid is None:
-            self.grid    = CMEMS_Grid_2D(fname)  # All components of the vector must be on same grid
+            self.grid    = CMEMS_Grid_2D(fname, varname)  # All components of the vector must be on same grid
         else:
             self.grid    = grid   # reference provided instance
         # resolve property attribute prop
@@ -350,7 +350,7 @@ class CMEMS_GridData_2DwithTime(CMEMS_GridData_withTime):
         self.fname  = fname
         self.ncfdata = CMEMS_dataformat.CMEMS_DataSet(fname)
         if grid is None:
-            self.grid    = CMEMS_Grid_2D(fname) 
+            self.grid    = CMEMS_Grid_2D(fname, varname) 
         else:
             self.grid    = grid   # reference provided instance
         # resolve property attribute prop

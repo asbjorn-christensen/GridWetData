@@ -251,7 +251,7 @@ class CMEMS_DataSet:
             var   = swapaxes(var, 0, 1)                         # cast to 2D GWD layout
         else:
             msg = "get_time_frame: unexpected axes / axes ordering : %s" % str(ncvar.dimensions)
-            raise exception.ValueError(msg)
+            raise exceptions.ValueError(msg)
         # --- flip axes, if required, to obtain standard layout ---
         #
         if self.flip_lon:
@@ -276,14 +276,18 @@ class CMEMS_DataSet:
         #  3D: (time, depth, lat, lon) ->  (lon, lat, depth)
         #  2D: (time, lat, lon)        ->  (lon, lat)
         ncvar   = self.ncf.variables[vname]
-        wetmask = where(ncvar[0,:].mask, 0, 1)   # pick time frame 0
-        if ncvar.dimensions == ('time', 'depth', 'lat', 'lon'): # 3D case
-            wetmask   = swapaxes(wetmask, 0, 2)                         # cast to 3D GWD layout
-        elif ncvar.dimensions == ('time', 'lat', 'lon'):        # 2D case
-            wetmask   = swapaxes(wetmask, 0, 1)                         # cast to 2D GWD layout
-        else:
-            msg = "get_wetmask: unexpected axes / axes ordering : %s" % str(ncvar.dimensions)
-            raise exception.ValueError(msg)
+        wetmask = where(ncvar[0,:].mask, 0, 1)         # pick time frame 0
+        wetmask = wetmask*ones(ncvar[0,:].shape, int)  # .mask may be scalar True/False, ensure array
+        msg     = "get_wetmask: unhandled axes / axes ordering : %s" % str(ncvar.dimensions)
+        if ncvar.dimensions[0] != 'time':
+            raise exceptions.ValueError(msg)
+        if ncvar.dimensions[1] == 'depth':  # 3D case
+            if (ncvar.dimensions[2] in _lat_names) and (ncvar.dimensions[3] in _lon_names):
+                 wetmask   = swapaxes(wetmask, 0, 2)                         # cast to 3D GWD layout
+        else:                              # 2D case
+            if (ncvar.dimensions[1] in _lat_names) and (ncvar.dimensions[2] in _lon_names):
+                 wetmask   = swapaxes(wetmask, 0, 1)                         # cast to 2D GWD layout
+         
         # --- flip axes, if required, to obtain standard layout ---
         if self.flip_lon:
             wetmask = flip(wetmask, axis=0)  # flip requires numpy >= 1.12

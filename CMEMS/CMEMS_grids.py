@@ -20,13 +20,20 @@ class CMEMS_Grid_2D(LonLatGrid):
     ## constructor from file data
     #  @param self    The object pointer
     #  @param fname   file name of an CMEMS data netcdf file (contains grid info)
+    #  @param diagvar Name of diagnostic variable, to deduce wetmask from (optional), otherwise apply resolve_topo_varnames_2D
     #
-    def __init__(self, fname):
+    def __init__(self, fname, diagvar=None):
         ncfile     = CMEMS_dataformat.CMEMS_DataSet(fname)  # includes invoking _extract_2D_grid_params
         ## file name corresponding to loaded data set
         self.fname = fname
         #
         LonLatGrid.__init__(self, ncfile.nx, ncfile.ny, ncfile.lon0, ncfile.lat0, ncfile.dlon, ncfile.dlat)
+        if diagvar is not None:                           # used-provided diagnostic variable
+            self.wetmask = ncfile.get_wetmask(diagvar)
+        elif self.resolve_topo_varnames_2D is not None:
+            for diagvar in resolve_topo_varnames_2D.values():  # scan class-inherited dictionary of diagnostic variables
+                if ncfile.variables.has_key(diagvar):
+                    self.wetmask = ncfile.get_wetmask(diagvar)
         ncfile.close()
         #
         

@@ -184,10 +184,23 @@ class LonLatGrid:
     #  @param pos  any sequence (lon,lat <, ...>)
     def is_inside_grid(self, pos):
         try:
-            ixc,iyc = self.get_cell_indices(pos)
-            return True  # valid cell indices could be resolved
+            ixc,iyc = self.get_cell_indices(pos)  # may trigger HorizontalRangeViolation
+            return True                           # valid cell indices could be resolved
         except HorizontalRangeViolation:
             return False 
+
+    #  ---------------------------------------------------------------------------------
+    ## Flag whether pos is inside a valid cell, if the wetmask atribute is set
+    #  @param self The object pointer
+    #  @param pos  any sequence (lon,lat <, ...>)
+    def is_valid(self, pos):
+        if not hasattr(self, "wetmask"):
+            raise AttributeError("attribute wetmask is not set")
+        try:
+            ixc,iyc = self.get_cell_indices(pos) # may trigger HorizontalRangeViolation
+            return self.wetmask[ixc,iyc] == 1    
+        except HorizontalRangeViolation:
+            return False
         
     
     # -----------------------------------------------------------------------
