@@ -11,6 +11,11 @@
 #     "C-squares", a new spatial indexing system and its applicability to the description of oceanographic datasets.
 #     Oceanography, vol.16(1): 11-19.
 #
+# LICENSE: c_squares.py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Lesser General Public License as published by the Free Software Foundation.
+# A copy of GNU Lesser General Public License pertaining to GridWetData is provided in the file lgpl.txt,
+# referring to the GNU General Public License provided in gpl.txt
+#
 #  This module provides:
 #
 #     1) raw transformations:
@@ -42,7 +47,16 @@
 #
 #     csqrlist = CSquareList("5704:143:373:***|7016:466:469:131")  # create a list of csquares by parsing input string
 #
-# ---------------------------------------------------------------
+# --------------------------------------------------------------------------------------------
+# LICENSE: c_squares.py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Lesser General Public License as published by the Free Software Foundation.
+# A copy of GNU Lesser General Public License pertaining to GridWetData is provided in the file lgpl.txt,
+# referring to the GNU General Public License provided in gpl.txt
+#
+# DISCLAIMER: c_squares.py is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details (http://www.gnu.org/licenses)
+# --------------------------------------------------------------------------------------------
 
 import exceptions
 from math import sin, pi     # for CSquare.area
