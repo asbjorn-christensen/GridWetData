@@ -19,9 +19,20 @@ def has_rank_2(obj):
     return hasattr(obj, "__len__") and hasattr(obj[0], "__len__") and not hasattr(obj[0][0], "__len__")
 
 
+# =======================================================================================
+## Super class for managing generic issues in relation to grid data / vector / ... frames corresponding to a specific time (or time invariant)
+#  
+# <b> Roles </b> 
+#    \li manage generic issues in object frame on a grid
+#
+class GridObject:
+     def pass_time_to_friend(self, other):
+         ## pass on time attribute for self to other, if present
+         if hasattr(self, "time"):
+             other.time = self.time # reference, not copy
         
 # ==============================================================================
-## Super class for managing a grid data set corresponding to a specific time
+## Super class for managing a grid (scalar) data set corresponding to a specific time
 #  grid is assumed corresponding to fname. Class is not aware about properties
 #  of grid data nor properties of the grid nor the dimensionality of the grid.
 #  The class is just a composition of a grid and data associated with the grid.
@@ -32,7 +43,7 @@ def has_rank_2(obj):
 #    \li  delegate interpolation request, depending on single/array argument
 #     \li call hook is redirectd to interpolate, so instances are callable as obj(where)
 #
-class GridData:
+class GridData(GridObject):
     #  -----------------------------------------------------
     ## Dual constructor of single property ocean data snapshot
     #  Sea level is assumed updated in the passed grid (if it is a 3D grid type),
@@ -99,12 +110,16 @@ class GridData:
 
     ## redirect call hook in class scope
     __call__ = interpolate
+
+    
     
     #  ============== whole array operations ==============
     ## gradient of field - delegated to grid
     def gradient(self):
         grad = self.grid.gradient(self.data)
-        return GridVector(self.grid, grad) # a GridVector type
+        obj = GridVector(self.grid, grad)
+        self.pass_time_to_friend(obj)
+        return obj
     
     #  ============== generic writers ==============
     
@@ -135,7 +150,7 @@ class GridData:
 
 
         
-class GridVector:
+class GridVector(GridObject):
     #  -----------------------------------------------------
     ## Dual constructor of vector property ocean data snapshot
     #  All vector components pertain to same grid (i.e. no staggering for this class)
@@ -238,7 +253,9 @@ class GridData_3D(GridData):
     #
     def get_surface_layer(self, **kwargs):
         grid, data = self.grid.get_surface_layer(self.data, **kwargs)
-        return GridData_2D(grid, data)
+        obj = GridData_2D(grid, data)
+        self.pass_time_to_friend(obj)
+        return obj
     
     #  -------------------------------------------------------
     ## Project bottom layer of data at native grid resolution
@@ -247,7 +264,9 @@ class GridData_3D(GridData):
     #
     def get_bottom_layer(self, **kwargs):
         grid, data = self.grid.get_bottom_layer(self.data, **kwargs)
-        return GridData_2D(grid, data)
+        obj = GridData_2D(grid, data)
+        self.pass_time_to_friend(obj)
+        return obj
     
     #  -------------------------------------------------------
     ## Generate vertical average of data at native grid resolution
@@ -256,7 +275,9 @@ class GridData_3D(GridData):
     #
     def get_vertical_average(self):
         grid, data = self.grid.get_vertical_average(self.data)
-        return GridData_2D(grid, data)
+        obj = GridData_2D(grid, data)
+        self.pass_time_to_friend(obj)
+        return obj
 
     #  -------------------------------------------------------
     ## Generate vertical max of data at native grid resolution
@@ -265,7 +286,9 @@ class GridData_3D(GridData):
     #
     def get_vertical_max(self):
         grid, data = self.grid.get_vertical_max(self.data)
-        return GridData_2D(grid, data)
+        obj = GridData_2D(grid, data)
+        self.pass_time_to_friend(obj)
+        return obj
 
 # ==============================================================================
 ## Sub class of GridData for 2-dimensional situations (currently void)
@@ -273,9 +296,10 @@ class GridVector_2D(GridVector):
     #  ============== whole array operations ==============
     ## horizontal curl of vector field - delegated to grid
     def curl(self):
-        curl = self.grid.curl(self.data) 
-        return GridData_2D(self.grid, curl) # only z component of the curl
-    
+        curl = self.grid.curl(self.data)
+        obj = GridData_2D(self.grid, curl)  # only z component of the curl
+        self.pass_time_to_friend(obj)
+        return obj
     
 
 # ==============================================================================
@@ -297,12 +321,16 @@ class GridVector_3D(GridVector):
         for component in self.data:
             grid, surfdata = self.grid.get_surface_layer(component, **kwargs)
             data.append(surfdata)
-        return GridVector_2D(grid, data)
+        obj = GridVector_2D(grid, data)
+        self.pass_time_to_friend(obj)
+        return obj
 
     ## full curl of vector field - delegated to grid
     def curl(self):
         curl = self.grid.curl(self.data)   # 3D grid -> 3D vector
-        return GridVector_3D(self.grid, curl)
+        obj = GridVector_3D(self.grid, curl)
+        self.pass_time_to_friend(obj)
+        return obj
     
 #  ====================================================================================
 ## Super class for offline interpolation in space+time by first interpolating space, then time - Generic for 2D/3D
