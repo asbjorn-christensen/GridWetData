@@ -49,8 +49,8 @@ def addsecs(timeobj, sec):
 #  NB: inplace transformation of u is performed
 #  ------------------------------------------------------------------------------------------------
 def to_deglonlat_per_sec(u,x):
-    u[0] /= EarthMeanRadius*deg2rad
-    u[1] /= EarthMeanRadius*cos(x[1]*deg2rad)*deg2rad # x = (lambda[degE], phi[degN], z[m_down])
+    u[0] /= EarthMeanRadius*cos(x[1]*deg2rad)*deg2rad  # bugfix 13 Oct 2023
+    u[1] /= EarthMeanRadius*deg2rad # x = (lambda[degE], phi[degN], z[m_down])
     return u
     
 def euler(x, env, now, dt):
